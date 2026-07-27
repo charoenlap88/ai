@@ -1,0 +1,42 @@
+name: Deploy (main → production)
+
+# main ถูก merge → build บน GitHub → ส่ง dist ขึ้น VPS → restart
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ตรวจ syntax
+        run: node --check server.js
+
+      - name: build dist
+        run: npm run build
+
+      - name: ตั้งค่า SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: ส่ง dist ขึ้น server (ไม่แตะ .env / ข้อมูล user)
+        run: |
+          rsync -az --delete \
+            --exclude='.env' --exclude='users.json' --exclude='tokens.json' \
+            --exclude='schedules.json' --exclude='sessions' --exclude='.ds-backups' --exclude='uploads' \
+            -e "ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }}" \
+            dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/ai/
+
+      - name: restart แอปด้วย pm2
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "cd ~/ai && (pm2 reload ai-agent || pm2 start server.js --name ai-agent) && pm2 save"

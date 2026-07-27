@@ -1,0 +1,17 @@
+# ---- ความลับ / ข้อมูล runtime — ห้ามขึ้น git ----
+.env
+users.json
+tokens.json
+schedules.json
+sessions/
+.ds-backups/
+uploads/
+server.log
+
+# ---- node / build ----
+node_modules/
+dist/
+
+# ---- misc ----
+.DS_Store
+*.bak

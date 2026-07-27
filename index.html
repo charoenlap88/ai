@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepSeek Coding Agent</title>
+<style>
+  :root{--pri:#4d6bff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0f1117;color:#e6e8ef;height:100vh;display:flex}
+  /* sidebar */
+  .side{width:250px;flex:none;background:#12141d;border-right:1px solid #262a38;display:flex;flex-direction:column}
+  .side .sec{padding:10px 12px;border-bottom:1px solid #20242f}
+  .side .lbl{font-size:11px;color:#7a8098;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+  .rootbox{font-size:11.5px;color:#a9b0c6;word-break:break-all;background:#0f1117;border:1px solid #262a38;border-radius:8px;padding:7px 9px}
+  .btn{background:#232838;color:#dfe3f0;border:1px solid #313850;border-radius:8px;padding:7px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+  .btn:hover{background:#2b3247}
+  .btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+  .btn.full{width:100%}
+  .sess{flex:1;overflow-y:auto;padding:6px}
+  .sitem{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
+  .sitem:hover{background:#1b2030}
+  .sitem.active{background:#22305a}
+  .sitem .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sitem .x{opacity:.4;font-size:12px}.sitem .x:hover{opacity:1;color:#ff8a8a}
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  header{background:#171a24;border-bottom:1px solid #262a38;padding:9px 16px;font-size:14px;font-weight:600}
+  .warn{background:#3a2410;color:#ffcf8a;font-size:11.5px;padding:5px 16px;border-bottom:1px solid #4a3418}
+  .ctrl{display:flex;align-items:center;gap:8px;padding:7px 16px;background:#141722;border-bottom:1px solid #262a38;font-size:13px}
+  .ctrl label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  #chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:11px}
+  .msg{max-width:820px;padding:11px 14px;border-radius:12px;white-space:pre-wrap;line-height:1.55;font-size:14px}
+  .user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
+  .bot{align-self:flex-start;background:#1c2030;border:1px solid #2a2f42;border-bottom-left-radius:4px}
+  .acts{align-self:flex-start;font-size:11.5px;color:#7fd0a0;background:#0e1710;border:1px solid #1e3020;border-radius:8px;padding:6px 10px;white-space:pre-wrap;font-family:ui-monospace,monospace}
+  .folderbar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:#12141d;border-top:1px solid #262a38;font-size:12px;color:#a9b0c6}
+  .folderbar .fb-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0f1117;border:1px solid #262a38;border-radius:7px;padding:5px 9px}
+  .folderbar .fb-btn{flex:none;background:#232838;color:#dfe3f0;border:1px solid #313850;border-radius:7px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+  .folderbar .fb-btn:hover{background:#2b3247}
+  .foot{border-top:1px solid #262a38;padding:10px 16px;display:flex;gap:8px;background:#141722}
+  textarea{flex:1;resize:none;background:#0f1117;border:1px solid #2a2f42;border-radius:10px;color:#fff;padding:10px 12px;font:inherit;font-size:14px;height:46px}
+  textarea:focus{outline:none;border-color:var(--pri)}
+  .send{background:var(--pri);color:#fff;border:0;border-radius:10px;padding:0 20px;font-weight:600;cursor:pointer}.send:disabled{opacity:.5}
+  .hint{color:#8a90a6;font-size:13px;text-align:center;margin:auto}
+  /* code / path highlight */
+  .codewrap{background:#0a0d16;border:1px solid #232a3d;border-radius:10px;margin:8px 0;overflow:hidden}
+  .codehdr{display:flex;justify-content:space-between;align-items:center;background:#151b2a;padding:4px 8px 4px 12px;font-size:11px;color:#8a90a6}
+  .copy{background:#232838;border:1px solid #313850;color:#dfe3f0;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer}
+  .copy:hover{background:#2b3247}
+  pre.code{margin:0;padding:11px 13px;overflow-x:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5;color:#cfe4ff;white-space:pre}
+  code.ic{background:#232a3d;color:#9fd0ff;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+  /* folder modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay.on{display:flex}
+  .modal{background:#171a24;border:1px solid #2a2f42;border-radius:14px;width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column}
+  .modal h3{margin:0;padding:14px 16px;border-bottom:1px solid #262a38;font-size:15px}
+  .modal .cur{padding:8px 16px;font-size:12px;color:#a9b0c6;word-break:break-all;border-bottom:1px solid #20242f}
+  .dl{flex:1;overflow-y:auto;padding:8px}
+  .dl div{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+  .dl div:hover{background:#22283a}
+  .modal label{display:block;font-size:12px;color:#9aa0c0;margin:10px 0 5px;font-weight:500}
+  .modal input:not([type=checkbox]),.modal textarea{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:9px 11px;font:inherit;font-size:13.5px;color-scheme:dark;transition:border-color .15s}
+  .modal input[type=checkbox]{width:auto;color-scheme:dark}
+  .modal input:focus,.modal textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(77,107,255,.18)}
+  .chips2{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+  .chips2 button{background:#20213c;border:1px solid #313850;color:#c7c7ea;font-size:12px;padding:5px 11px;border-radius:20px;cursor:pointer}
+  .chips2 button:hover{border-color:var(--pri);color:#fff}
+  #loginView{position:fixed;inset:0;background:#0f1117;display:flex;align-items:center;justify-content:center;z-index:200}
+  #loginView .box{background:#1a1b2e;border:1px solid #2c2d44;border-radius:16px;padding:26px;width:340px}
+  #loginView input{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:10px 12px;font:inherit;margin-bottom:8px;color-scheme:dark}
+  #loginView input:focus{outline:none;border-color:var(--pri)}
+  #userbar{font-size:12px}
+  #userbar .em{color:#e6e8ef;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #userbar .q{color:#8a90a6;margin:3px 0 6px}
+  #userbar .qbar{height:5px;background:#0f1117;border-radius:3px;overflow:hidden;margin-top:3px}
+  #userbar .qbar>i{display:block;height:100%;background:var(--pri)}
+  .utable{width:100%;font-size:12.5px;border-collapse:collapse}
+  .utable td,.utable th{padding:6px 5px;border-bottom:1px solid #262a38;text-align:left}
+  .badge2{font-size:11px;padding:2px 7px;border-radius:10px}
+  .badge2.approved{background:#12341f;color:#7fd0a0}.badge2.pending{background:#3a3410;color:#ffcf8a}.badge2.disabled{background:#3a1414;color:#ff8a8a}
+  .modal .mfoot{padding:12px 16px;border-top:1px solid #262a38;display:flex;gap:8px;justify-content:flex-end}
+</style>
+</head>
+<body>
+<aside class="side">
+  <div class="sec" id="userbar"></div>
+  <div class="sec"><button class="btn pri full" onclick="newChat()">+ แชทใหม่</button>
+    <button class="btn full" style="margin-top:6px" onclick="openSched()">⏰ งานตามเวลา</button></div>
+  <div class="lbl" style="padding:8px 12px 0">ประวัติ</div>
+  <div class="sess" id="sessList"></div>
+</aside>
+
+<div class="main">
+  <header>🤖 DeepSeek Coding Agent</header>
+  <div class="warn">⚠️ AI อ่าน/แก้ไฟล์ + เข้าเน็ตได้ · แก้ไฟล์ต้องติ๊กอนุญาต · backup ที่ .ds-backups/ · localhost เท่านั้น</div>
+  <div class="ctrl">
+    <label><input type="checkbox" id="allowWrite" checked> ✏️ อนุญาตให้แก้ไฟล์</label>
+    <label style="color:#ffb98a"><input type="checkbox" id="allowShell"> ⌨️ อนุญาตรันคำสั่ง (อันตราย)</label>
+  </div>
+  <div id="chat"><div class="hint">พิมพ์สั่งงาน เช่น "อ่าน server.js สรุปให้หน่อย" · "ค้นเน็ตว่า X คืออะไร" · (เปิดแก้ไฟล์) "เพิ่ม endpoint /ping"</div></div>
+  <div class="folderbar">
+    <span class="fb-ic">📁</span><span class="fb-path" id="rootbox">...</span>
+    <button class="fb-btn" onclick="openBrowse()">เปลี่ยนโฟลเดอร์</button>
+  </div>
+  <div class="foot">
+    <textarea id="inp" placeholder="สั่งงาน... (Enter ส่ง, Shift+Enter ขึ้นบรรทัด)"></textarea>
+    <button class="send" id="sendBtn" onclick="send()">ส่ง</button>
+  </div>
+</div>
+
+<div class="overlay" id="ov" onclick="if(event.target===this)closeBrowse()">
+  <div class="modal">
+    <h3>เลือกโฟลเดอร์</h3>
+    <div class="cur" id="curPath"></div>
+    <div class="dl" id="dirList"></div>
+    <div class="mfoot"><button class="btn" onclick="closeBrowse()">ยกเลิก</button><button class="btn pri" onclick="useFolder()">✅ ใช้โฟลเดอร์นี้</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovSched" onclick="if(event.target===this)closeSched()">
+  <div class="modal">
+    <h3>⏰ งานตามเวลา (Scheduled)</h3>
+    <div class="cur">งานจะรันในโฟลเดอร์ของ session ปัจจุบัน · ผลเก็บใน "ประวัติ"</div>
+    <div style="padding:12px 16px;overflow:auto">
+      <label>คำสั่งงาน</label>
+      <textarea id="sc_prompt" rows="2" style="width:100%;height:auto" placeholder="เช่น สรุปไฟล์ที่เปลี่ยนวันนี้ / เช็คข่าวเรื่อง X"></textarea>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label>รันครั้งเดียวเวลา</label><input id="sc_at" type="datetime-local" style="width:100%"></div>
+        <div style="flex:1"><label>หรือ ทำซ้ำทุกๆ (นาที)</label><input id="sc_every" type="number" placeholder="เช่น 60" style="width:100%"></div>
+      </div>
+      <div class="chips2">
+        <button onclick="setAt(30)">+30 นาที</button>
+        <button onclick="setAt(60)">+1 ชม.</button>
+        <button onclick="setTomorrow(9)">พรุ่งนี้ 09:00</button>
+        <button onclick="setEvery(60)">🔁 ทุกชม.</button>
+        <button onclick="setEvery(1440)">🔁 ทุกวัน</button>
+      </div>
+      <div style="display:flex;gap:16px;margin:8px 0;font-size:13px">
+        <label style="display:flex;gap:6px;cursor:pointer"><input type="checkbox" id="sc_write"> ✏️ แก้ไฟล์</label>
+        <label style="display:flex;gap:6px;cursor:pointer"><input type="checkbox" id="sc_shell"> ⌨️ รันคำสั่ง</label>
+      </div>
+      <button class="btn pri" onclick="addSched()">+ เพิ่มงาน</button>
+      <span id="sc_msg" style="font-size:12px;margin-left:8px;color:#7fd0a0"></span>
+      <hr style="border:0;border-top:1px solid #262a38;margin:14px 0">
+      <div id="schedList"></div>
+    </div>
+    <div class="mfoot"><button class="btn" onclick="closeSched()">ปิด</button></div>
+  </div>
+</div>
+
+<div id="loginView">
+  <div class="box">
+    <h2 style="margin:0 0 4px;font-size:18px">🤖 DeepSeek Agent</h2>
+    <div style="color:#8a90a6;font-size:12.5px;margin-bottom:16px" id="login_sub">เข้าสู่ระบบ</div>
+    <input id="lg_email" placeholder="email" autocomplete="username">
+    <input id="lg_pass" type="password" placeholder="password" autocomplete="current-password">
+    <button class="btn pri" style="width:100%;margin-top:4px" id="lg_btn" onclick="doAuth()">เข้าสู่ระบบ</button>
+    <div id="lg_msg" style="font-size:12.5px;margin-top:8px"></div>
+    <div style="font-size:12.5px;margin-top:12px;color:#8a90a6">
+      <span id="lg_toggle_txt">ยังไม่มีบัญชี?</span> <a onclick="toggleReg()" style="color:#8ab4ff;cursor:pointer" id="lg_toggle">สมัครสมาชิก</a>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovAdmin" onclick="if(event.target===this)$('ovAdmin').classList.remove('on')">
+  <div class="modal" style="width:640px">
+    <h3>👑 Admin — จัดการผู้ใช้ & quota</h3>
+    <div class="dl" style="padding:12px 16px"><div id="userList"></div></div>
+    <div class="mfoot"><button class="btn" onclick="$('ovAdmin').classList.remove('on')">ปิด</button></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let authToken = localStorage.getItem('dsauth') || '', me = null, regMode = false;
+const _fetch = window.fetch.bind(window);
+window.fetch = (url, opts = {}) => { // แนบ token ให้ทุก /api
+  if (typeof url === 'string' && url.indexOf('/api/') === 0 && authToken) opts.headers = { ...(opts.headers || {}), authorization: 'Bearer ' + authToken };
+  return _fetch(url, opts);
+};
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+// render markdown แบบเบาๆ: code block + inline code/path พร้อมปุ่มคัดลอก
+function inlineFmt(s){ return esc(s).replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>'); }
+function codeBlock(code, lang){ return `<div class="codewrap"><div class="codehdr"><span>${esc(lang || 'code')}</span><button class="copy" data-c="${encodeURIComponent(code)}" onclick="copyCode(this)">📋 คัดลอก</button></div><pre class="code">${esc(code)}</pre></div>`; }
+function fmt(text){
+  const fence = /```(\w*)\n?([\s\S]*?)```/g; let html = '', last = 0, m;
+  while ((m = fence.exec(text))) { html += inlineFmt(text.slice(last, m.index)); html += codeBlock(m[2].replace(/\n$/, ''), m[1]); last = fence.lastIndex; }
+  return html + inlineFmt(text.slice(last));
+}
+function copyCode(btn){ navigator.clipboard.writeText(decodeURIComponent(btn.dataset.c)); const o = btn.textContent; btn.textContent = '✅ คัดลอกแล้ว'; setTimeout(() => btn.textContent = o, 1200); }
+let history = [], currentId = null, browsePath = '', defaultRoot = '', currentRoot = '', noKey = false;
+
+// ---- root / folder ----
+async function loadRoot(){ const d = await fetch('/api/root').then(r=>r.json()); defaultRoot=d.root; if(!currentRoot) currentRoot=d.root; noKey=!d.hasKey; renderRoot(); }
+function renderRoot(){ $('rootbox').innerHTML = esc(currentRoot) + (noKey?' <span style="color:#ff8a8a">(ไม่มี key)</span>':''); }
+async function openBrowse(path){ const d = await fetch('/api/browse?path='+encodeURIComponent(path||'')).then(r=>r.json()); if(d.error) return alert(d.error); browsePath=d.path; $('curPath').textContent='📁 '+d.path; $('dirList').innerHTML='<div onclick="openBrowse(\''+d.parent.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">📁 .. (ขึ้นบน)</div>'+d.dirs.map(n=>`<div onclick="openBrowse('${(d.path+'/'+n).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">📁 ${esc(n)}</div>`).join(''); $('ov').classList.add('on'); }
+function closeBrowse(){ $('ov').classList.remove('on'); }
+function useFolder(){ currentRoot=browsePath; renderRoot(); closeBrowse(); } // ตั้ง root ของ session ปัจจุบัน (ไม่ global)
+
+// ---- sessions ----
+async function loadSessions(){ const list = await fetch('/api/sessions').then(r=>r.json());
+  $('sessList').innerHTML = list.map(s=>`<div class="sitem ${s.id===currentId?'active':''}" onclick="loadSession('${s.id}')">
+    <span class="t">${s.mine?'':'👥 '}${esc(s.title)}</span>
+    ${s.mine
+      ? `<span class="x" title="แชร์" onclick="event.stopPropagation();shareSession('${s.id}')">👤﹢</span><span class="x" title="ลบ" onclick="event.stopPropagation();delSession('${s.id}')">✕</span>`
+      : `<span class="x" title="แชร์กับฉัน${s.canEdit?' (แก้ได้)':' (ดูอย่างเดียว)'}">${s.canEdit?'✏️':'👁️'}</span>`}
+  </div>`).join('') || '<div class="hint" style="font-size:12px;padding:10px">ยังไม่มีประวัติ</div>'; }
+async function shareSession(id){
+  const email=prompt('แชร์ session ให้ (อีเมลผู้ใช้ในระบบ):'); if(!email)return;
+  const canEdit=confirm('ให้สิทธิ์แก้ไขด้วยไหม?\n\nOK = แก้ไขได้ · Cancel = ดูอย่างเดียว');
+  const d=await fetch('/api/sessions/'+id+'/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,canEdit})}).then(r=>r.json());
+  alert(d.error?('❌ '+d.error):('✅ แชร์ให้ '+email+' แล้ว ('+(canEdit?'แก้ไขได้':'ดูอย่างเดียว')+')'));
+}
+async function loadSession(id){ const d = await fetch('/api/sessions/'+id).then(r=>r.json()); history = d.messages||[]; currentId = id; currentRoot = d.root||defaultRoot; renderRoot(); renderHistory(); loadSessions(); }
+async function delSession(id){ if(!confirm('ลบแชทนี้?'))return; await fetch('/api/sessions/'+id,{method:'DELETE'}); if(id===currentId) newChat(); loadSessions(); }
+function newChat(){ history=[]; currentId=null; currentRoot=defaultRoot; renderRoot(); $('chat').innerHTML='<div class="hint">แชทใหม่ — พิมพ์สั่งงานได้เลย</div>'; loadSessions(); }
+async function saveSession(){ const title = (history.find(m=>m.role==='user')||{}).content || 'แชทใหม่'; const d = await fetch('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:currentId,title,messages:history,root:currentRoot})}).then(r=>r.json()); currentId = d.id; loadSessions(); }
+
+// ---- chat ----
+function add(cls, html){ const d=document.createElement('div'); d.className='msg '+cls; d.innerHTML=html; $('chat').appendChild(d); $('chat').scrollTop=1e9; return d; }
+function renderHistory(){ $('chat').innerHTML=''; history.forEach(m=>add(m.role==='user'?'user':'bot', m.role==='user'?esc(m.content):fmt(m.content))); if(!history.length) $('chat').innerHTML='<div class="hint">ว่าง</div>'; }
+async function send(){
+  const text=$('inp').value.trim(); if(!text) return;
+  if($('chat').querySelector('.hint')) $('chat').innerHTML='';
+  $('inp').value=''; add('user', esc(text)); history.push({role:'user',content:text});
+  $('sendBtn').disabled=true; $('sendBtn').textContent='...';
+  const thinking=add('acts','⏳ เริ่มทำงาน...');
+  const steps=[]; let result=null;
+  try{
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:history,allowWrite:$('allowWrite').checked,allowShell:$('allowShell').checked,root:currentRoot})});
+    const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+    for(;;){
+      const {value,done}=await reader.read(); if(done)break;
+      buf+=dec.decode(value,{stream:true}); let idx;
+      while((idx=buf.indexOf('\n'))>=0){
+        const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+1); if(!line)continue;
+        const ev=JSON.parse(line);
+        if(ev.type==='step'){ steps.push(ev.text); thinking.textContent='⏳ '+steps.slice(-7).join('\n'); $('chat').scrollTop=1e9; }
+        else if(ev.type==='notify'){ add('bot', fmt(ev.text)); $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } // ข้อความสด (แผน/ความคืบหน้า)
+        else if(ev.type==='error'){ throw new Error(ev.error); }
+        else if(ev.type==='done'){ result=ev; }
+      }
+    }
+    thinking.remove();
+    if(result){
+      if(result.used!=null&&me){ me.used=result.used; me.quota=result.quota; renderUser(); } // อัปเดต quota
+      if(result.actions&&result.actions.length) add('acts', result.actions.join('\n'));
+      add('bot', fmt(result.reply)); history.push({role:'assistant',content:result.reply}); saveSession();
+    }
+  }catch(e){ thinking.textContent='❌ '+e.message; }
+  $('sendBtn').disabled=false; $('sendBtn').textContent='ส่ง';
+}
+$('inp').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } });
+
+// ---- งานตามเวลา ----
+const pad2=n=>String(n).padStart(2,'0');
+const toLocalInput=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+function setAt(min){ $('sc_at').value=toLocalInput(new Date(Date.now()+min*60000)); $('sc_every').value=''; }
+function setTomorrow(h){ const d=new Date(); d.setDate(d.getDate()+1); d.setHours(h,0,0,0); $('sc_at').value=toLocalInput(d); $('sc_every').value=''; }
+function setEvery(m){ $('sc_every').value=m; $('sc_at').value=''; }
+function openSched(){ $('ovSched').classList.add('on'); loadSchedList(); }
+function closeSched(){ $('ovSched').classList.remove('on'); }
+async function addSched(){
+  const prompt=$('sc_prompt').value.trim(); if(!prompt){ $('sc_msg').style.color='#ff8a8a'; $('sc_msg').textContent='ใส่คำสั่งก่อน'; return; }
+  const at=$('sc_at').value? new Date($('sc_at').value).toISOString():null;
+  const everyMin=$('sc_every').value||null;
+  if(!at&&!everyMin){ $('sc_msg').style.color='#ff8a8a'; $('sc_msg').textContent='ตั้งเวลา หรือ ทำซ้ำ อย่างใดอย่างหนึ่ง'; return; }
+  await fetch('/api/schedules',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt,at,everyMin,allowWrite:$('sc_write').checked,allowShell:$('sc_shell').checked,root:currentRoot})});
+  $('sc_prompt').value='';$('sc_at').value='';$('sc_every').value=''; $('sc_msg').style.color='#7fd0a0'; $('sc_msg').textContent='เพิ่มแล้ว ✓'; loadSchedList();
+}
+async function loadSchedList(){
+  const a=await fetch('/api/schedules').then(r=>r.json());
+  $('schedList').innerHTML = a.length? a.map(t=>`<div style="border:1px solid #262a38;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12.5px">
+    <div style="color:#e6e8ef">${esc(t.prompt).slice(0,80)}</div>
+    <div style="color:#8a90a6;margin-top:3px">${t.everyMin?('🔁 ทุก '+t.everyMin+' นาที'):('🕐 '+new Date(t.at).toLocaleString('th-TH'))} · ${esc(t.lastStatus||'รอ')} ${t.enabled?'':'· (ปิด)'}</div>
+    <div style="color:#5f6680;margin-top:2px;font-size:11px">📁 ${esc(t.root||'')}</div>
+    <div style="margin-top:6px;display:flex;gap:6px"><button class="btn" onclick="runSchedNow('${t.id}')">▶️ รันเลย</button><button class="btn" style="color:#ff8a8a" onclick="delSched('${t.id}')">ลบ</button></div>
+  </div>`).join('') : '<div style="color:#8a90a6;font-size:12px">ยังไม่มีงานตามเวลา</div>';
+}
+async function runSchedNow(id){ $('sc_msg').style.color='#8a90a6'; $('sc_msg').textContent='สั่งรันแล้ว — ดูผลใน ประวัติ'; await fetch('/api/schedules/'+id+'/run',{method:'POST'}); setTimeout(()=>{loadSchedList();loadSessions();},2000); }
+async function delSched(id){ if(!confirm('ลบงานนี้?'))return; await fetch('/api/schedules/'+id,{method:'DELETE'}); loadSchedList(); }
+
+// ---- Auth / Admin (เฟส 1) ----
+function toggleReg(){ regMode=!regMode; $('login_sub').textContent=regMode?'สมัครสมาชิก (รอ admin อนุมัติ)':'เข้าสู่ระบบ'; $('lg_btn').textContent=regMode?'สมัคร':'เข้าสู่ระบบ'; $('lg_toggle_txt').textContent=regMode?'มีบัญชีแล้ว?':'ยังไม่มีบัญชี?'; $('lg_toggle').textContent=regMode?'เข้าสู่ระบบ':'สมัครสมาชิก'; $('lg_msg').textContent=''; }
+async function doAuth(){
+  const email=$('lg_email').value.trim(), password=$('lg_pass').value;
+  $('lg_msg').style.color='#ff8a8a';
+  if(!email||!password){ $('lg_msg').textContent='กรอก email + password'; return; }
+  const ep=regMode?'/api/auth/register':'/api/auth/login';
+  const d=await _fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})}).then(r=>r.json());
+  if(d.error){ $('lg_msg').textContent=d.error; return; }
+  if(regMode){ $('lg_msg').style.color='#7fd0a0'; $('lg_msg').textContent=d.message||'สมัครแล้ว รอ admin อนุมัติ'; toggleReg(); return; }
+  authToken=d.token; localStorage.setItem('dsauth',authToken); me=d.user; enterApp();
+}
+function logout(){ authToken=''; localStorage.removeItem('dsauth'); location.reload(); }
+async function initAuth(){
+  if(!authToken){ $('loginView').style.display='flex'; return; }
+  try{ const r=await fetch('/api/auth/me'); if(!r.ok) throw 0; me=await r.json(); enterApp(); }
+  catch{ authToken=''; localStorage.removeItem('dsauth'); $('loginView').style.display='flex'; }
+}
+function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions(); }
+function renderUser(){
+  const pct = me.quota>0 ? Math.min(100, Math.round((me.used/me.quota)*100)) : 0;
+  $('userbar').innerHTML = `<div class="em">${esc(me.email)} ${me.role==='admin'?'👑':''}</div>
+    <div class="q">token: ${me.used||0}${me.quota>0?(' / '+me.quota):' (ไม่จำกัด)'}</div>
+    ${me.quota>0?`<div class="qbar"><i style="width:${pct}%"></i></div>`:''}
+    <div style="display:flex;gap:6px;margin-top:8px">
+      ${me.role==='admin'?'<button class="btn" style="flex:1" onclick="openAdmin()">👑 Admin</button>':''}
+      <button class="btn" style="flex:1" onclick="logout()">ออก</button>
+    </div>`;
+}
+async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetch('/api/users').then(r=>r.json());
+  $('userList').innerHTML=`<table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
+   a.map(x=>`<tr><td>${esc(x.email)} ${x.role==='admin'?'👑':''}</td>
+     <td><span class="badge2 ${x.status}">${x.status}</span></td>
+     <td>${x.used||0}</td>
+     <td><input value="${x.quota||0}" id="q_${x.id}" style="width:76px;background:#0f1117;border:1px solid #2a2f42;color:#fff;border-radius:6px;padding:3px 6px"></td>
+     <td style="white-space:nowrap">
+       ${x.status!=='approved'?`<button class="btn" onclick="setUser('${x.id}',{status:'approved',quota:+document.getElementById('q_${x.id}').value})">✅ อนุมัติ</button>`:`<button class="btn" onclick="setUser('${x.id}',{quota:+document.getElementById('q_${x.id}').value})">💾</button>`}
+       ${x.status==='approved'&&x.role!=='admin'?`<button class="btn" style="color:#ff8a8a" onclick="setUser('${x.id}',{status:'disabled'})">ระงับ</button>`:''}
+       ${x.status==='disabled'?`<button class="btn" onclick="setUser('${x.id}',{status:'approved'})">คืนสิทธิ์</button>`:''}
+     </td></tr>`).join('')+`</table><div style="color:#8a90a6;font-size:11.5px;margin-top:8px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกด อนุมัติ/💾</div>`;
+}
+async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
+
+initAuth();
+</script>
+</body>
+</html>

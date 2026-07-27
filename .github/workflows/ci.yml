@@ -1,0 +1,26 @@
+name: CI (develop)
+
+# ทำงานบน develop: ตรวจโค้ด + build dist เก็บเป็น artifact (ไม่ deploy)
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: ตรวจ syntax
+        run: node --check server.js
+      - name: build dist
+        run: npm run build
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

@@ -1,0 +1,12 @@
+{
+  "name": "ai-agent",
+  "version": "1.0.0",
+  "description": "DeepSeek AI agent server (ai.charoenlap.com)",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js",
+    "build": "rm -rf dist && mkdir -p dist && cp server.js index.html package.json dist/ && echo built dist/"
+  },
+  "engines": { "node": ">=20" }
+}
