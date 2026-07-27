@@ -387,10 +387,11 @@ async function initGoogle(){
   try{
     const cfg=await fetch('/api/config').then(r=>r.json());
     if(!cfg.googleClientId) return; // ยังไม่ตั้ง GOOGLE_CLIENT_ID → ซ่อนปุ่ม
-    const start=()=>{ if(!window.google?.accounts?.id) return setTimeout(start,200);
+    $('gwrap').style.display='block'; // โชว์ก่อน → container มีความกว้าง ปุ่มถึง render ถูกขนาด
+    let tries=0;
+    const start=()=>{ if(!window.google?.accounts?.id){ if(tries++<60) setTimeout(start,200); return; }
       google.accounts.id.initialize({client_id:cfg.googleClientId,callback:onGoogle});
       google.accounts.id.renderButton($('gbtn'),{theme:'filled_black',size:'large',shape:'pill',width:280,text:'signin_with'});
-      $('gwrap').style.display='block';
     }; start();
   }catch{}
 }
