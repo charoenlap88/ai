@@ -25,6 +25,9 @@ const DEFAULT_ROOT = path.resolve(process.env.PROJECT_ROOT || DIR); // ค่า
 const KEY = process.env.DEEPSEEK_API_KEY;
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const PORT = process.env.PORT || 4040;
+// เมลในลิสต์นี้ = admin + อนุมัติอัตโนมัติ (คั่นด้วย ,)
+const ADMIN_SET = new Set((process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+const isAdminEmail = e => ADMIN_SET.has(String(e || '').toLowerCase());
 const SESS = path.join(DIR, 'sessions'); fs.mkdirSync(SESS, { recursive: true });
 await db.bootstrap(); // โหลด DB เข้า memory (Firebase RTDB ถ้าตั้ง env, ไม่งั้น JSON ไฟล์)
 const loadSched = () => db.getSchedules();
@@ -265,9 +268,10 @@ const server = http.createServer(async (req, res) => {
       if (!b.email || !b.password) return J(res, 400, { error: 'กรอก email + password' });
       const users = loadUsers();
       if (users.find(x => x.email === b.email)) return J(res, 400, { error: 'อีเมลนี้มีแล้ว' });
-      users.push({ id: 'u' + Date.now(), email: b.email, pass_hash: hashPw(b.password), role: 'user', status: 'pending', quota: 0, used: 0, created: new Date().toISOString() });
+      const adm = isAdminEmail(b.email);
+      users.push({ id: 'u' + Date.now(), email: b.email, pass_hash: hashPw(b.password), role: adm ? 'admin' : 'user', status: adm ? 'approved' : 'pending', quota: 0, used: 0, created: new Date().toISOString() });
       saveUsers(users);
-      return J(res, 200, { ok: true, message: 'สมัครแล้ว รอ admin อนุมัติ' });
+      return J(res, 200, { ok: true, message: adm ? 'สมัครแล้ว (admin) เข้าสู่ระบบได้เลย' : 'สมัครแล้ว รอ admin อนุมัติ' });
     }
     if (p === '/api/auth/login' && req.method === 'POST') {
       const b = JSON.parse(await readBody(req) || '{}');
@@ -287,7 +291,9 @@ const server = http.createServer(async (req, res) => {
       const okEmail = info && (info.email_verified === true || info.email_verified === 'true');
       if (!info || info.aud !== CID || !okIss || !okEmail) return J(res, 401, { error: 'ยืนยัน Google ไม่สำเร็จ' });
       const users = loadUsers(); let u = users.find(x => x.email === info.email);
-      if (!u) { u = { id: 'u' + Date.now(), email: info.email, pass_hash: '', role: 'user', status: 'pending', quota: 0, used: 0, google: true, created: new Date().toISOString() }; users.push(u); saveUsers(users); }
+      const adm = isAdminEmail(info.email);
+      if (!u) { u = { id: 'u' + Date.now(), email: info.email, pass_hash: '', role: adm ? 'admin' : 'user', status: adm ? 'approved' : 'pending', quota: 0, used: 0, google: true, created: new Date().toISOString() }; users.push(u); saveUsers(users); }
+      else if (adm && (u.role !== 'admin' || u.status !== 'approved')) { u.role = 'admin'; u.status = 'approved'; saveUsers(users); } // อัปเกรดเมล admin ที่มีอยู่แล้ว
       if (u.status !== 'approved') return J(res, 403, { error: u.status === 'pending' ? 'บัญชี Google รอ admin อนุมัติ' : 'บัญชีถูกระงับ' });
       return J(res, 200, { token: issueToken(u.id), user: pub(u) });
     }
