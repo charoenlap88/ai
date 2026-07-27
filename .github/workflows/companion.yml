@@ -1,0 +1,62 @@
+name: Companion (build mac + win installers)
+
+# build โปรแกรม Electron ทั้ง mac(.dmg) และ win(.exe) แล้วส่งขึ้น VPS ที่ ~/ai/downloads/
+on:
+  push:
+    branches: [main]
+    paths: ['companion/**', '.github/workflows/companion.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --mac
+          - os: windows-latest
+            args: --win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: install + build
+        working-directory: companion
+        run: |
+          npm install
+          npx electron-builder ${{ matrix.args }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: |
+            companion/release/*.dmg
+            companion/release/*.exe
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: main
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: ส่ง installer ขึ้น VPS
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          SSH="ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -p ${SSH_PORT:-22}"
+          $SSH "$SSH_USER@$SSH_HOST" 'mkdir -p ~/ai/downloads'
+          files=$(find dl -type f \( -name '*.dmg' -o -name '*.exe' \))
+          echo "ไฟล์ที่จะส่ง:"; echo "$files"
+          [ -n "$files" ] || { echo 'ไม่พบ installer'; exit 1; }
+          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -P ${SSH_PORT:-22} $files "$SSH_USER@$SSH_HOST:~/ai/downloads/"
+          $SSH "$SSH_USER@$SSH_HOST" 'ls -lh ~/ai/downloads'

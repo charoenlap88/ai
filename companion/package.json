@@ -1,13 +1,23 @@
 {
-  "name": "ds-agent-companion",
-  "version": "0.1.0",
-  "description": "DeepSeek Agent Companion — เข้าถึงไฟล์ในเครื่องตัวเอง, ใช้ AI ผ่าน server (token กลาง)",
+  "name": "ai-agent-companion",
+  "version": "1.0.0",
+  "description": "AI Agent Companion — เข้าถึงไฟล์ในเครื่องตัวเอง, ใช้ AI ผ่าน server (token กลาง)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.charoenlap.aiagent",
+    "productName": "AI Agent",
+    "files": ["main.js", "index.html", "package.json"],
+    "directories": { "output": "release" },
+    "mac": { "target": [{ "target": "dmg", "arch": ["universal"] }], "artifactName": "AI-Agent-mac.${ext}" },
+    "win": { "target": "nsis", "artifactName": "AI-Agent-win-setup.${ext}" },
+    "nsis": { "oneClick": true, "perMachine": false }
   }
 }

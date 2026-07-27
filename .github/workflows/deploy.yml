@@ -42,7 +42,7 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude='.env' --exclude='users.json' --exclude='tokens.json' \
-            --exclude='schedules.json' --exclude='sessions' --exclude='.ds-backups' --exclude='uploads' \
+            --exclude='schedules.json' --exclude='sessions' --exclude='.ds-backups' --exclude='uploads' --exclude='downloads' --exclude='workspaces' \
             -e "ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=accept-new" \
             dist/ "$SSH_USER@$SSH_HOST:/home/$SSH_USER/ai/"
 

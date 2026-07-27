@@ -403,8 +403,13 @@ const server = http.createServer(async (req, res) => {
     // ---- static ----
     const fp = path.join(DIR, p === '/' ? 'index.html' : path.normalize(p));
     if (fp.startsWith(DIR) && fs.existsSync(fp) && fs.statSync(fp).isFile()) {
-      res.writeHead(200, { 'content-type': fp.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/plain' });
-      return res.end(fs.readFileSync(fp));
+      const ext = path.extname(fp).toLowerCase();
+      const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.zip': 'application/zip', '.dmg': 'application/octet-stream', '.exe': 'application/octet-stream' };
+      const st = fs.statSync(fp);
+      const h = { 'content-type': types[ext] || 'text/plain', 'content-length': st.size };
+      if (['.dmg', '.exe', '.zip'].includes(ext)) h['content-disposition'] = 'attachment; filename="' + path.basename(fp) + '"';
+      res.writeHead(200, h);
+      return fs.createReadStream(fp).pipe(res); // stream กันไฟล์ใหญ่กินแรม
     }
     res.writeHead(404); res.end('not found');
   } catch (e) { J(res, 400, { error: String(e.message || e) }); }
