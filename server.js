@@ -218,9 +218,13 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify) {
 
 // ---- Scheduler: รันงานตามเวลา ----
 async function runTask(t) {
-  const root = t.root || DEFAULT_ROOT; // โฟลเดอร์ของงานนั้น
+  // ความปลอดภัย: งานตั้งเวลาก็ใช้ write/shell ได้เฉพาะเจ้าของที่เป็น admin · คนอื่นถูกขังใน sandbox
+  const owner = loadUsers().find(u => u.id === t.owner);
+  const isAdmin = owner && owner.role === 'admin';
+  const root = isAdmin ? (t.root || DEFAULT_ROOT) : path.join(DIR, 'workspaces', t.owner || 'anon');
+  if (!isAdmin) fs.mkdirSync(root, { recursive: true });
   try {
-    const out = await chat([{ role: 'user', content: t.prompt }], t.allowWrite, t.allowShell, null, root);
+    const out = await chat([{ role: 'user', content: t.prompt }], isAdmin && t.allowWrite, isAdmin && t.allowShell, null, root);
     if (t.owner) addUsage(t.owner, out.tokens); // นับ quota ให้เจ้าของงาน
     const sid = 'sched-' + Date.now();
     db.putSession({ id: sid, owner: t.owner, title: '[⏰] ' + t.prompt.slice(0, 50), messages: [{ role: 'user', content: t.prompt }, { role: 'assistant', content: out.reply }], root, updated: new Date().toISOString() });
@@ -359,10 +363,15 @@ const server = http.createServer(async (req, res) => {
       const { messages, allowWrite, allowShell, root } = JSON.parse(await readBody(req) || '{}');
       if (!KEY) return J(res, 400, { error: 'ยังไม่ได้ตั้ง DEEPSEEK_API_KEY ใน .env' });
       if (me.quota > 0 && me.used >= me.quota) return J(res, 403, { error: 'ใช้ token ครบโควตาแล้ว (' + me.used + '/' + me.quota + ') — ติดต่อ admin' });
-      const useRoot = (root && fs.existsSync(root) && fs.statSync(root).isDirectory()) ? path.resolve(root) : DEFAULT_ROOT;
+      // ความปลอดภัย: แก้ไฟล์/รันคำสั่ง + เลือกโฟลเดอร์อิสระ = admin เท่านั้น · user อื่นถูกขังใน sandbox (กันแก้/ลบ/อ่านไฟล์ server)
+      const isAdmin = me.role === 'admin';
+      const aw = isAdmin && !!allowWrite, ash = isAdmin && !!allowShell;
+      const useRoot = isAdmin
+        ? ((root && fs.existsSync(root) && fs.statSync(root).isDirectory()) ? path.resolve(root) : DEFAULT_ROOT)
+        : (fs.mkdirSync(path.join(DIR, 'workspaces', me.id), { recursive: true }), path.join(DIR, 'workspaces', me.id));
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       try {
-        const out = await chat(messages || [], !!allowWrite, !!allowShell, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'));
+        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'));
         addUsage(me.id, out.tokens); // นับ quota
         out.used = (me.used || 0) + (out.tokens || 0); out.quota = me.quota;
         res.write(JSON.stringify({ type: 'done', ...out }) + '\n');

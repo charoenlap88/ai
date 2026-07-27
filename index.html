@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DeepSeek Coding Agent</title>
+<title>AI Agent</title>
 <style>
   :root{--pri:#4d6bff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
   *{box-sizing:border-box}
@@ -91,7 +91,7 @@
 </aside>
 
 <div class="main">
-  <header>🤖 DeepSeek Coding Agent</header>
+  <header>AI Agent</header>
   <div class="warn">⚠️ AI อ่าน/แก้ไฟล์ + เข้าเน็ตได้ · แก้ไฟล์ต้องติ๊กอนุญาต · backup ที่ .ds-backups/ · localhost เท่านั้น</div>
   <div class="ctrl">
     <label><input type="checkbox" id="allowWrite" checked> ✏️ อนุญาตให้แก้ไฟล์</label>
@@ -150,10 +150,13 @@
 
 <div id="loginView">
   <div class="box">
-    <h2 style="margin:0 0 4px;font-size:18px">🤖 DeepSeek Agent</h2>
+    <h2 style="margin:0 0 4px;font-size:18px">AI Agent</h2>
     <div style="color:#8a90a6;font-size:12.5px;margin-bottom:16px" id="login_sub">เข้าสู่ระบบ</div>
     <input id="lg_email" placeholder="email" autocomplete="username">
-    <input id="lg_pass" type="password" placeholder="password" autocomplete="current-password">
+    <div style="position:relative">
+      <input id="lg_pass" type="password" placeholder="password" autocomplete="current-password" style="width:100%;padding-right:44px;box-sizing:border-box">
+      <button type="button" aria-label="ดูรหัสผ่าน" onclick="var i=$('lg_pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈'" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:4px;color:#8a90a6">👁</button>
+    </div>
     <button class="btn pri" style="width:100%;margin-top:4px" id="lg_btn" onclick="doAuth()">เข้าสู่ระบบ</button>
     <div id="lg_msg" style="font-size:12.5px;margin-top:8px"></div>
     <div style="font-size:12.5px;margin-top:12px;color:#8a90a6">
