@@ -8,6 +8,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +24,12 @@ jobs:
       - name: build dist
         run: npm run build
 
+      - name: ตรวจ secrets (ไม่โชว์ค่า)
+        run: |
+          echo "SSH_HOST len=${#SSH_HOST}  SSH_USER len=${#SSH_USER}  SSH_PORT='${SSH_PORT:-22}'"
+          [ -n "$SSH_HOST" ] || { echo '❌ SSH_HOST ว่าง — ยังไม่ได้บันทึก secret'; exit 1; }
+          [ -n "$SSH_USER" ] || { echo '❌ SSH_USER ว่าง'; exit 1; }
+
       - name: ตั้งค่า SSH key
         run: |
           mkdir -p ~/.ssh
@@ -31,11 +41,11 @@ jobs:
           rsync -az --delete \
             --exclude='.env' --exclude='users.json' --exclude='tokens.json' \
             --exclude='schedules.json' --exclude='sessions' --exclude='.ds-backups' --exclude='uploads' \
-            -e "ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=accept-new" \
-            dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/ai/
+            -e "ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=accept-new" \
+            dist/ "$SSH_USER@$SSH_HOST:/home/$SSH_USER/ai/"
 
       - name: restart แอปด้วย pm2
         run: |
-          ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=accept-new \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
             "cd ~/ai && (pm2 reload ai-agent || pm2 start server.js --name ai-agent) && pm2 save"
