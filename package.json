@@ -2,7 +2,7 @@
   "name": "ai-agent",
   "version": "1.0.0",
   "description": "DeepSeek AI agent server (ai.charoenlap.com)",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js",
