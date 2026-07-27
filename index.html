@@ -319,7 +319,7 @@ async function runSchedNow(id){ $('sc_msg').style.color='#8a90a6'; $('sc_msg').t
 async function delSched(id){ if(!confirm('ลบงานนี้?'))return; await fetch('/api/schedules/'+id,{method:'DELETE'}); loadSchedList(); }
 
 // ---- Auth / Admin (เฟส 1) ----
-function toggleReg(){ regMode=!regMode; $('login_sub').textContent=regMode?'สมัครสมาชิก (รอ admin อนุมัติ)':'เข้าสู่ระบบ'; $('lg_btn').textContent=regMode?'สมัคร':'เข้าสู่ระบบ'; $('lg_toggle_txt').textContent=regMode?'มีบัญชีแล้ว?':'ยังไม่มีบัญชี?'; $('lg_toggle').textContent=regMode?'เข้าสู่ระบบ':'สมัครสมาชิก'; $('lg_msg').textContent=''; }
+function toggleReg(){ regMode=!regMode; $('login_sub').textContent=regMode?'สมัครสมาชิก (ใช้ได้ทันที)':'เข้าสู่ระบบ'; $('lg_btn').textContent=regMode?'สมัคร':'เข้าสู่ระบบ'; $('lg_toggle_txt').textContent=regMode?'มีบัญชีแล้ว?':'ยังไม่มีบัญชี?'; $('lg_toggle').textContent=regMode?'เข้าสู่ระบบ':'สมัครสมาชิก'; $('lg_msg').textContent=''; }
 async function doAuth(){
   const email=$('lg_email').value.trim(), password=$('lg_pass').value;
   $('lg_msg').style.color='#ff8a8a';
@@ -327,8 +327,7 @@ async function doAuth(){
   const ep=regMode?'/api/auth/register':'/api/auth/login';
   const d=await _fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})}).then(r=>r.json());
   if(d.error){ $('lg_msg').textContent=d.error; return; }
-  if(regMode){ $('lg_msg').style.color='#7fd0a0'; $('lg_msg').textContent=d.message||'สมัครแล้ว รอ admin อนุมัติ'; toggleReg(); return; }
-  authToken=d.token; localStorage.setItem('dsauth',authToken); me=d.user; enterApp();
+  authToken=d.token; localStorage.setItem('dsauth',authToken); me=d.user; enterApp(); // สมัคร/ล็อกอิน เข้าใช้ได้เลย
 }
 function logout(){ authToken=''; localStorage.removeItem('dsauth'); location.reload(); }
 async function initAuth(){
