@@ -9,7 +9,16 @@ import { promisify } from 'node:util';
 import crypto from 'node:crypto';
 import * as db from './services/db.js';
 const pexec = promisify(exec);
-try { process.loadEnvFile(); } catch {}
+// ponytail: โหลด .env เอง (node<20.6 ไม่มี process.loadEnvFile) — cwd ก่อน แล้ว fallback ที่โฟลเดอร์ไฟล์
+for (const _f of [path.resolve('.env'), fileURLToPath(new URL('.env', import.meta.url))]) {
+  try {
+    for (const _l of fs.readFileSync(_f, 'utf8').split('\n')) {
+      const _m = _l.match(/^\s*([\w.]+)\s*=\s*(.*)?\s*$/);
+      if (_m && process.env[_m[1]] === undefined) process.env[_m[1]] = (_m[2] || '').replace(/^["']|["']$/g, '');
+    }
+    break;
+  } catch {}
+}
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(process.env.PROJECT_ROOT || DIR); // ค่าเริ่มต้น (แต่ละ session เลือกเองได้)
