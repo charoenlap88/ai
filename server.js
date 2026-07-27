@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import crypto from 'node:crypto';
+import * as db from './services/db.js';
 const pexec = promisify(exec);
 try { process.loadEnvFile(); } catch {}
 
@@ -16,17 +17,17 @@ const KEY = process.env.DEEPSEEK_API_KEY;
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const PORT = process.env.PORT || 4040;
 const SESS = path.join(DIR, 'sessions'); fs.mkdirSync(SESS, { recursive: true });
-const SCHED_FILE = path.join(DIR, 'schedules.json');
-const loadSched = () => { try { return JSON.parse(fs.readFileSync(SCHED_FILE, 'utf8')); } catch { return []; } };
-const saveSched = a => fs.writeFileSync(SCHED_FILE, JSON.stringify(a, null, 2));
+await db.bootstrap(); // โหลด DB เข้า memory (Firebase RTDB ถ้าตั้ง env, ไม่งั้น JSON ไฟล์)
+const loadSched = () => db.getSchedules();
+const saveSched = a => db.saveSchedules(a);
 
 // ---- Auth / users / quota (เฟส 1) ----
 const USERS_FILE = path.join(DIR, 'users.json');
 const TOKENS_FILE = path.join(DIR, 'tokens.json');
-const loadUsers = () => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch { return []; } };
-const saveUsers = a => fs.writeFileSync(USERS_FILE, JSON.stringify(a, null, 2));
-const loadTokens = () => { try { return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8')); } catch { return {}; } };
-const saveTokens = t => fs.writeFileSync(TOKENS_FILE, JSON.stringify(t));
+const loadUsers = () => db.getUsers();
+const saveUsers = a => db.saveUsers(a);
+const loadTokens = () => db.getTokens();
+const saveTokens = t => db.saveTokens(t);
 const pub = u => u && ({ id: u.id, email: u.email, role: u.role, status: u.status, quota: u.quota, used: u.used });
 function hashPw(pw) { const s = crypto.randomBytes(16); return s.toString('hex') + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function verifyPw(pw, stored) { const [s, h] = String(stored).split(':'); if (!s || !h) return false; const a = crypto.scryptSync(pw, Buffer.from(s, 'hex'), 64), b = Buffer.from(h, 'hex'); return a.length === b.length && crypto.timingSafeEqual(a, b); }
@@ -213,7 +214,7 @@ async function runTask(t) {
     const out = await chat([{ role: 'user', content: t.prompt }], t.allowWrite, t.allowShell, null, root);
     if (t.owner) addUsage(t.owner, out.tokens); // นับ quota ให้เจ้าของงาน
     const sid = 'sched-' + Date.now();
-    fs.writeFileSync(path.join(SESS, sid + '.json'), JSON.stringify({ id: sid, owner: t.owner, title: '[⏰] ' + t.prompt.slice(0, 50), messages: [{ role: 'user', content: t.prompt }, { role: 'assistant', content: out.reply }], root, updated: new Date().toISOString() }));
+    db.putSession({ id: sid, owner: t.owner, title: '[⏰] ' + t.prompt.slice(0, 50), messages: [{ role: 'user', content: t.prompt }, { role: 'assistant', content: out.reply }], root, updated: new Date().toISOString() });
     t.lastRun = new Date().toISOString(); t.lastStatus = '✅ สำเร็จ';
   } catch (e) { t.lastRun = new Date().toISOString(); t.lastStatus = '❌ ' + String(e.message || e).slice(0, 80); }
 }
@@ -289,22 +290,22 @@ const server = http.createServer(async (req, res) => {
     const canSee = rec => rec.owner === me.id || me.role === 'admin' || (rec.shared || []).some(s => s.id === me.id);
     const canEditS = rec => rec.owner === me.id || (rec.shared || []).some(s => s.id === me.id && s.canEdit);
     if (p === '/api/sessions' && req.method === 'GET') {
-      const all = fs.readdirSync(SESS).filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(SESS, f))); } catch { return null; } }).filter(Boolean);
+      const all = db.listSessions();
       const list = all.filter(canSee).map(d => ({ id: d.id, title: d.title, updated: d.updated, mine: d.owner === me.id, canEdit: canEditS(d) })).sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
       return J(res, 200, list);
     }
     if (p === '/api/sessions' && req.method === 'POST') {
       const b = JSON.parse(await readBody(req) || '{}');
       const id = b.id || ('s' + Date.now());
-      const fp = path.join(SESS, id + '.json');
       let owner = me.id, shared = [];
-      if (fs.existsSync(fp)) { const ex = JSON.parse(fs.readFileSync(fp)); if (!canEditS(ex)) return J(res, 403, { error: 'ไม่มีสิทธิ์แก้ session นี้' }); owner = ex.owner; shared = ex.shared || []; }
-      fs.writeFileSync(fp, JSON.stringify({ id, owner, shared, title: (b.title || 'แชทใหม่').slice(0, 60), messages: b.messages || [], root: b.root || DEFAULT_ROOT, updated: new Date().toISOString() }));
+      const ex = db.getSession(id);
+      if (ex) { if (!canEditS(ex)) return J(res, 403, { error: 'ไม่มีสิทธิ์แก้ session นี้' }); owner = ex.owner; shared = ex.shared || []; }
+      db.putSession({ id, owner, shared, title: (b.title || 'แชทใหม่').slice(0, 60), messages: b.messages || [], root: b.root || DEFAULT_ROOT, updated: new Date().toISOString() });
       return J(res, 200, { id });
     }
     if ((m = p.match(/^\/api\/sessions\/([\w-]+)\/share$/)) && req.method === 'POST') {
-      const fp = path.join(SESS, m[1] + '.json'); if (!fs.existsSync(fp)) return J(res, 404, { error: 'not found' });
-      const rec = JSON.parse(fs.readFileSync(fp)); if (rec.owner !== me.id) return J(res, 403, { error: 'เฉพาะเจ้าของแชร์ได้' });
+      const rec = db.getSession(m[1]); if (!rec) return J(res, 404, { error: 'not found' });
+      if (rec.owner !== me.id) return J(res, 403, { error: 'เฉพาะเจ้าของแชร์ได้' });
       const b = JSON.parse(await readBody(req) || '{}'); rec.shared = rec.shared || [];
       if (b.remove) { rec.shared = rec.shared.filter(s => s.id !== b.userId); }
       else {
@@ -313,14 +314,13 @@ const server = http.createServer(async (req, res) => {
         if (tgt.id === me.id) return J(res, 400, { error: 'แชร์ให้ตัวเองไม่ได้' });
         rec.shared = rec.shared.filter(s => s.id !== tgt.id).concat([{ id: tgt.id, email: tgt.email, canEdit: !!b.canEdit }]);
       }
-      fs.writeFileSync(fp, JSON.stringify(rec)); return J(res, 200, { shared: rec.shared });
+      db.putSession(rec); return J(res, 200, { shared: rec.shared });
     }
     if (m = p.match(/^\/api\/sessions\/([\w-]+)$/)) {
-      const fp = path.join(SESS, m[1] + '.json');
-      if (!fs.existsSync(fp)) return J(res, 404, { error: 'not found' });
-      const rec = JSON.parse(fs.readFileSync(fp));
+      const rec = db.getSession(m[1]);
+      if (!rec) return J(res, 404, { error: 'not found' });
       if (!canSee(rec)) return J(res, 403, { error: 'ไม่มีสิทธิ์เข้าถึง' });
-      if (req.method === 'DELETE') { if (rec.owner !== me.id && me.role !== 'admin') return J(res, 403, { error: 'เฉพาะเจ้าของลบได้' }); fs.rmSync(fp, { force: true }); return J(res, 200, { ok: true }); }
+      if (req.method === 'DELETE') { if (rec.owner !== me.id && me.role !== 'admin') return J(res, 403, { error: 'เฉพาะเจ้าของลบได้' }); db.delSession(m[1]); return J(res, 200, { ok: true }); }
       return J(res, 200, rec);
     }
     // ---- งานตามเวลา (แยกตาม user) ----
