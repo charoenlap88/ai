@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Agent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234d6bff'/%3E%3Cpath d='M16 5.5l2.4 6.1 6.1 2.4-6.1 2.4L16 22.5l-2.4-6.1L7.5 14l6.1-2.4z' fill='%23fff'/%3E%3Ccircle cx='24.5' cy='8' r='2' fill='%23a9b8ff'/%3E%3C/svg%3E">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <style>
   :root{--pri:#4d6bff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -322,7 +323,7 @@ async function initAuth(){
   try{ const r=await fetch('/api/auth/me'); if(!r.ok) throw 0; me=await r.json(); enterApp(); }
   catch{ authToken=''; localStorage.removeItem('dsauth'); $('loginView').style.display='flex'; }
 }
-const fmt=n=>(+n||0).toLocaleString();
+const fmtN=n=>(+n||0).toLocaleString();
 function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions();
   const admin = me.role==='admin';
   for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
@@ -331,7 +332,7 @@ function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot
 function renderUser(){
   const pct = me.quota>0 ? Math.min(100, Math.round((me.used/me.quota)*100)) : 0;
   $('userbar').innerHTML = `<div class="em">${esc(me.email)} ${me.role==='admin'?'👑':''}</div>
-    <div class="q">token: ${fmt(me.used)}${me.quota>0?(' / '+fmt(me.quota)):' (ไม่จำกัด)'}</div>
+    <div class="q">token: ${fmtN(me.used)}${me.quota>0?(' / '+fmtN(me.quota)):' (ไม่จำกัด)'}</div>
     ${me.quota>0?`<div class="qbar"><i style="width:${pct}%"></i></div>`:''}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn" style="flex:1" onclick="openProfile()">👤 โปรไฟล์</button>
@@ -344,8 +345,8 @@ function openProfile(){
   $('profileBody').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
       <div><div class="lbl">อีเมล</div><div style="font-size:15px">${esc(me.email)} ${me.role==='admin'?'👑 admin':''}</div></div>
-      <div><div class="lbl">Token ที่ใช้ไป</div><div style="font-size:15px">${fmt(me.used)}${me.quota>0?(' / '+fmt(me.quota)):' (ไม่จำกัด)'}</div></div>
-      ${me.quota>0?`<div class="qbar" style="height:8px"><i style="width:${pct}%"></i></div><div class="lbl">เหลือ ${fmt(left)} token</div>`:''}
+      <div><div class="lbl">Token ที่ใช้ไป</div><div style="font-size:15px">${fmtN(me.used)}${me.quota>0?(' / '+fmtN(me.quota)):' (ไม่จำกัด)'}</div></div>
+      ${me.quota>0?`<div class="qbar" style="height:8px"><i style="width:${pct}%"></i></div><div class="lbl">เหลือ ${fmtN(left)} token</div>`:''}
     </div>`;
   $('ovProfile').classList.add('on');
 }
@@ -354,13 +355,13 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
   const totQuota=a.reduce((s,x)=>s+(x.quota>0?x.quota:0),0);
   $('userList').innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">ผู้ใช้ทั้งหมด</div><div style="font-size:19px;font-weight:600">${a.length}</div></div>
-      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Token ใช้ไปรวม</div><div style="font-size:19px;font-weight:600">${fmt(totUsed)}</div></div>
-      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Quota รวม (จำกัด)</div><div style="font-size:19px;font-weight:600">${fmt(totQuota)}</div><div class="lbl">+ ${unlimited} คนไม่จำกัด</div></div>
+      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Token ใช้ไปรวม</div><div style="font-size:19px;font-weight:600">${fmtN(totUsed)}</div></div>
+      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Quota รวม (จำกัด)</div><div style="font-size:19px;font-weight:600">${fmtN(totQuota)}</div><div class="lbl">+ ${unlimited} คนไม่จำกัด</div></div>
     </div>`+
    `<table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
    a.map(x=>`<tr><td>${esc(x.email)} ${x.role==='admin'?'👑':''}</td>
      <td><span class="badge2 ${x.status}">${x.status}</span></td>
-     <td>${fmt(x.used)}</td>
+     <td>${fmtN(x.used)}</td>
      <td><input value="${x.quota||0}" id="q_${x.id}" style="width:90px;background:#0f1117;border:1px solid #2a2f42;color:#fff;border-radius:6px;padding:3px 6px"></td>
      <td style="white-space:nowrap">
        ${x.status!=='approved'?`<button class="btn" onclick="setUser('${x.id}',{status:'approved',quota:+document.getElementById('q_${x.id}').value})">✅ อนุมัติ</button>`:`<button class="btn" onclick="setUser('${x.id}',{quota:+document.getElementById('q_${x.id}').value})">💾</button>`}
