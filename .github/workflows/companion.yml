@@ -34,6 +34,9 @@ jobs:
           path: |
             companion/release/*.dmg
             companion/release/*.exe
+            companion/release/*.zip
+            companion/release/*.yml
+            companion/release/*.blockmap
           if-no-files-found: error
 
   publish:
@@ -55,7 +58,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           SSH="ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -p ${SSH_PORT:-22}"
           $SSH "$SSH_USER@$SSH_HOST" 'mkdir -p ~/ai/downloads'
-          files=$(find dl -type f \( -name '*.dmg' -o -name '*.exe' \))
+          files=$(find dl -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.zip' -o -name '*.yml' -o -name '*.blockmap' \))
           echo "ไฟล์ที่จะส่ง:"; echo "$files"
           [ -n "$files" ] || { echo 'ไม่พบ installer'; exit 1; }
           scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -P ${SSH_PORT:-22} $files "$SSH_USER@$SSH_HOST:~/ai/downloads/"

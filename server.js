@@ -405,7 +405,7 @@ const server = http.createServer(async (req, res) => {
     const fp = path.join(DIR, p === '/' ? 'index.html' : path.normalize(p));
     if (fp.startsWith(DIR) && fs.existsSync(fp) && fs.statSync(fp).isFile()) {
       const ext = path.extname(fp).toLowerCase();
-      const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.zip': 'application/zip', '.dmg': 'application/octet-stream', '.exe': 'application/octet-stream' };
+      const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.zip': 'application/zip', '.dmg': 'application/octet-stream', '.exe': 'application/octet-stream', '.yml': 'text/yaml', '.blockmap': 'application/octet-stream' };
       const st = fs.statSync(fp);
       const h = { 'content-type': types[ext] || 'text/plain', 'content-length': st.size };
       if (['.dmg', '.exe', '.zip'].includes(ext)) h['content-disposition'] = 'attachment; filename="' + path.basename(fp) + '"';

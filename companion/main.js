@@ -1,4 +1,4 @@
-// Electron main — เปิดหน้าต่าง + dialog เลือกโฟลเดอร์
+// Electron main — เปิดหน้าต่าง + dialog เลือกโฟลเดอร์ + อัปเดตอัตโนมัติผ่านเน็ต
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 function createWindow() {
   const win = new BrowserWindow({
@@ -7,7 +7,19 @@ function createWindow() {
   });
   win.loadFile('index.html');
 }
-app.whenReady().then(createWindow);
+// เช็คอัปเดตจาก https://ai.charoenlap.com/downloads/ (โหลด+ติดตั้งเอง แจ้งเตือนเมื่อพร้อม)
+function checkUpdates() {
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.on('update-downloaded', () => {
+      dialog.showMessageBox({ type: 'info', buttons: ['รีสตาร์ทเลย', 'ทีหลัง'], defaultId: 0,
+        title: 'มีเวอร์ชันใหม่', message: 'ดาวน์โหลดอัปเดตเสร็จแล้ว — รีสตาร์ทเพื่อใช้เวอร์ชันใหม่' })
+        .then(r => { if (r.response === 0) autoUpdater.quitAndInstall(); });
+    });
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (e) { /* dev mode / ไม่มี feed → ข้าม */ }
+}
+app.whenReady().then(() => { createWindow(); checkUpdates(); });
 app.on('window-all-closed', () => app.quit());
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });

@@ -1,11 +1,14 @@
 {
   "name": "ai-agent-companion",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI Agent Companion — เข้าถึงไฟล์ในเครื่องตัวเอง, ใช้ AI ผ่าน server (token กลาง)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -16,7 +19,14 @@
     "productName": "AI Agent",
     "files": ["main.js", "index.html", "package.json"],
     "directories": { "output": "release" },
-    "mac": { "target": [{ "target": "dmg", "arch": ["universal"] }], "artifactName": "AI-Agent-mac.${ext}" },
+    "publish": [{ "provider": "generic", "url": "https://ai.charoenlap.com/downloads/" }],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["universal"] },
+        { "target": "zip", "arch": ["universal"] }
+      ],
+      "artifactName": "AI-Agent-mac.${ext}"
+    },
     "win": { "target": "nsis", "artifactName": "AI-Agent-win-setup.${ext}" },
     "nsis": { "oneClick": true, "perMachine": false }
   }
