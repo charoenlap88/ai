@@ -269,7 +269,7 @@ const server = http.createServer(async (req, res) => {
       const users = loadUsers();
       if (users.find(x => x.email === b.email)) return J(res, 400, { error: 'อีเมลนี้มีแล้ว' });
       const adm = isAdminEmail(b.email);
-      users.push({ id: 'u' + Date.now(), email: b.email, pass_hash: hashPw(b.password), role: adm ? 'admin' : 'user', status: adm ? 'approved' : 'pending', quota: 0, used: 0, created: new Date().toISOString() });
+      users.push({ id: 'u' + Date.now(), email: b.email, pass_hash: hashPw(b.password), role: adm ? 'admin' : 'user', status: adm ? 'approved' : 'pending', quota: adm ? 0 : 1000000, used: 0, created: new Date().toISOString() });
       saveUsers(users);
       return J(res, 200, { ok: true, message: adm ? 'สมัครแล้ว (admin) เข้าสู่ระบบได้เลย' : 'สมัครแล้ว รอ admin อนุมัติ' });
     }
@@ -292,7 +292,7 @@ const server = http.createServer(async (req, res) => {
       if (!info || info.aud !== CID || !okIss || !okEmail) return J(res, 401, { error: 'ยืนยัน Google ไม่สำเร็จ' });
       const users = loadUsers(); let u = users.find(x => x.email === info.email);
       const adm = isAdminEmail(info.email);
-      if (!u) { u = { id: 'u' + Date.now(), email: info.email, pass_hash: '', role: adm ? 'admin' : 'user', status: adm ? 'approved' : 'pending', quota: 0, used: 0, google: true, created: new Date().toISOString() }; users.push(u); saveUsers(users); }
+      if (!u) { u = { id: 'u' + Date.now(), email: info.email, pass_hash: '', role: adm ? 'admin' : 'user', status: adm ? 'approved' : 'pending', quota: adm ? 0 : 1000000, used: 0, google: true, created: new Date().toISOString() }; users.push(u); saveUsers(users); }
       else if (adm && (u.role !== 'admin' || u.status !== 'approved')) { u.role = 'admin'; u.status = 'approved'; saveUsers(users); } // อัปเกรดเมล admin ที่มีอยู่แล้ว
       if (u.status !== 'approved') return J(res, 403, { error: u.status === 'pending' ? 'บัญชี Google รอ admin อนุมัติ' : 'บัญชีถูกระงับ' });
       return J(res, 200, { token: issueToken(u.id), user: pub(u) });

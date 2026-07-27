@@ -1,0 +1,13 @@
+{
+  "name": "ds-agent-companion",
+  "version": "0.1.0",
+  "description": "DeepSeek Agent Companion — เข้าถึงไฟล์ในเครื่องตัวเอง, ใช้ AI ผ่าน server (token กลาง)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

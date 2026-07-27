@@ -89,17 +89,23 @@
     <button class="btn full" style="margin-top:6px" onclick="openSched()">⏰ งานตามเวลา</button></div>
   <div class="lbl" style="padding:8px 12px 0">ประวัติ</div>
   <div class="sess" id="sessList"></div>
+  <div class="sec" id="adminMenu" style="display:none;border-top:1px solid #2a2f42">
+    <button class="btn full" onclick="openAdmin()">📊 Token ผู้ใช้ / Admin</button>
+  </div>
 </aside>
 
 <div class="main">
-  <header>AI Agent</header>
-  <div class="warn">⚠️ AI อ่าน/แก้ไฟล์ + เข้าเน็ตได้ · แก้ไฟล์ต้องติ๊กอนุญาต · backup ที่ .ds-backups/ · localhost เท่านั้น</div>
-  <div class="ctrl">
+  <header style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <span>AI Agent</span>
+    <a href="/companion.zip" download style="text-decoration:none;background:#1a1e2b;border:1px solid #2a2f42;color:#cdd3e6;font-size:12.5px;padding:6px 12px;border-radius:8px;white-space:nowrap">⬇️ ดาวน์โหลดโปรแกรมลงเครื่อง</a>
+  </header>
+  <div class="warn" id="warnBar">⚠️ AI อ่าน/แก้ไฟล์ + เข้าเน็ตได้ · แก้ไฟล์ต้องติ๊กอนุญาต · backup ที่ .ds-backups/ · localhost เท่านั้น</div>
+  <div class="ctrl" id="ctrlBar">
     <label><input type="checkbox" id="allowWrite" checked> ✏️ อนุญาตให้แก้ไฟล์</label>
     <label style="color:#ffb98a"><input type="checkbox" id="allowShell"> ⌨️ อนุญาตรันคำสั่ง (อันตราย)</label>
   </div>
   <div id="chat"><div class="hint">พิมพ์สั่งงาน เช่น "อ่าน server.js สรุปให้หน่อย" · "ค้นเน็ตว่า X คืออะไร" · (เปิดแก้ไฟล์) "เพิ่ม endpoint /ping"</div></div>
-  <div class="folderbar">
+  <div class="folderbar" id="folderBar">
     <span class="fb-ic">📁</span><span class="fb-path" id="rootbox">...</span>
     <button class="fb-btn" onclick="openBrowse()">เปลี่ยนโฟลเดอร์</button>
   </div>
@@ -146,6 +152,14 @@
       <div id="schedList"></div>
     </div>
     <div class="mfoot"><button class="btn" onclick="closeSched()">ปิด</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovProfile" onclick="if(event.target===this)$('ovProfile').classList.remove('on')">
+  <div class="modal" style="width:420px">
+    <h3>👤 โปรไฟล์</h3>
+    <div id="profileBody"></div>
+    <div class="mfoot"><button class="btn" onclick="$('ovProfile').classList.remove('on')">ปิด</button></div>
   </div>
 </div>
 
@@ -308,23 +322,46 @@ async function initAuth(){
   try{ const r=await fetch('/api/auth/me'); if(!r.ok) throw 0; me=await r.json(); enterApp(); }
   catch{ authToken=''; localStorage.removeItem('dsauth'); $('loginView').style.display='flex'; }
 }
-function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions(); }
+const fmt=n=>(+n||0).toLocaleString();
+function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions();
+  const admin = me.role==='admin';
+  for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
+  $('adminMenu').style.display = admin?'block':'none';
+}
 function renderUser(){
   const pct = me.quota>0 ? Math.min(100, Math.round((me.used/me.quota)*100)) : 0;
   $('userbar').innerHTML = `<div class="em">${esc(me.email)} ${me.role==='admin'?'👑':''}</div>
-    <div class="q">token: ${me.used||0}${me.quota>0?(' / '+me.quota):' (ไม่จำกัด)'}</div>
+    <div class="q">token: ${fmt(me.used)}${me.quota>0?(' / '+fmt(me.quota)):' (ไม่จำกัด)'}</div>
     ${me.quota>0?`<div class="qbar"><i style="width:${pct}%"></i></div>`:''}
     <div style="display:flex;gap:6px;margin-top:8px">
-      ${me.role==='admin'?'<button class="btn" style="flex:1" onclick="openAdmin()">👑 Admin</button>':''}
+      <button class="btn" style="flex:1" onclick="openProfile()">👤 โปรไฟล์</button>
       <button class="btn" style="flex:1" onclick="logout()">ออก</button>
     </div>`;
 }
+function openProfile(){
+  const pct = me.quota>0 ? Math.min(100, Math.round((me.used/me.quota)*100)) : 0;
+  const left = me.quota>0 ? Math.max(0, me.quota-(me.used||0)) : null;
+  $('profileBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div><div class="lbl">อีเมล</div><div style="font-size:15px">${esc(me.email)} ${me.role==='admin'?'👑 admin':''}</div></div>
+      <div><div class="lbl">Token ที่ใช้ไป</div><div style="font-size:15px">${fmt(me.used)}${me.quota>0?(' / '+fmt(me.quota)):' (ไม่จำกัด)'}</div></div>
+      ${me.quota>0?`<div class="qbar" style="height:8px"><i style="width:${pct}%"></i></div><div class="lbl">เหลือ ${fmt(left)} token</div>`:''}
+    </div>`;
+  $('ovProfile').classList.add('on');
+}
 async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetch('/api/users').then(r=>r.json());
-  $('userList').innerHTML=`<table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
+  const totUsed=a.reduce((s,x)=>s+(x.used||0),0), unlimited=a.filter(x=>!(x.quota>0)).length;
+  const totQuota=a.reduce((s,x)=>s+(x.quota>0?x.quota:0),0);
+  $('userList').innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">ผู้ใช้ทั้งหมด</div><div style="font-size:19px;font-weight:600">${a.length}</div></div>
+      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Token ใช้ไปรวม</div><div style="font-size:19px;font-weight:600">${fmt(totUsed)}</div></div>
+      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Quota รวม (จำกัด)</div><div style="font-size:19px;font-weight:600">${fmt(totQuota)}</div><div class="lbl">+ ${unlimited} คนไม่จำกัด</div></div>
+    </div>`+
+   `<table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
    a.map(x=>`<tr><td>${esc(x.email)} ${x.role==='admin'?'👑':''}</td>
      <td><span class="badge2 ${x.status}">${x.status}</span></td>
-     <td>${x.used||0}</td>
-     <td><input value="${x.quota||0}" id="q_${x.id}" style="width:76px;background:#0f1117;border:1px solid #2a2f42;color:#fff;border-radius:6px;padding:3px 6px"></td>
+     <td>${fmt(x.used)}</td>
+     <td><input value="${x.quota||0}" id="q_${x.id}" style="width:90px;background:#0f1117;border:1px solid #2a2f42;color:#fff;border-radius:6px;padding:3px 6px"></td>
      <td style="white-space:nowrap">
        ${x.status!=='approved'?`<button class="btn" onclick="setUser('${x.id}',{status:'approved',quota:+document.getElementById('q_${x.id}').value})">✅ อนุมัติ</button>`:`<button class="btn" onclick="setUser('${x.id}',{quota:+document.getElementById('q_${x.id}').value})">💾</button>`}
        ${x.status==='approved'&&x.role!=='admin'?`<button class="btn" style="color:#ff8a8a" onclick="setUser('${x.id}',{status:'disabled'})">ระงับ</button>`:''}
