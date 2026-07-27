@@ -25,18 +25,17 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
       - name: ส่ง dist ขึ้น server (ไม่แตะ .env / ข้อมูล user)
         run: |
           rsync -az --delete \
             --exclude='.env' --exclude='users.json' --exclude='tokens.json' \
             --exclude='schedules.json' --exclude='sessions' --exclude='.ds-backups' --exclude='uploads' \
-            -e "ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }}" \
+            -e "ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=accept-new" \
             dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/ai/
 
       - name: restart แอปด้วย pm2
         run: |
-          ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }} \
+          ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=accept-new \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "cd ~/ai && (pm2 reload ai-agent || pm2 start server.js --name ai-agent) && pm2 save"
