@@ -34,8 +34,9 @@ jobs:
       - name: ตั้งค่า SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null && echo "✅ private key อ่านได้"
 
       - name: ส่ง dist ขึ้น server (ไม่แตะ .env / ข้อมูล user)
         run: |
