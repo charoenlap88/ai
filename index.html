@@ -156,7 +156,9 @@
     <input id="lg_email" placeholder="email" autocomplete="username">
     <div style="position:relative">
       <input id="lg_pass" type="password" placeholder="password" autocomplete="current-password" style="width:100%;padding-right:44px;box-sizing:border-box">
-      <button type="button" aria-label="ดูรหัสผ่าน" onclick="var i=$('lg_pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈'" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:4px;color:#8a90a6">👁</button>
+      <button type="button" aria-label="ดูรหัสผ่าน" onclick="pwEye(this,'lg_pass')" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:6px;color:#8a90a6;display:flex;line-height:0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
     </div>
     <button class="btn pri" style="width:100%;margin-top:4px" id="lg_btn" onclick="doAuth()">เข้าสู่ระบบ</button>
     <div id="lg_msg" style="font-size:12.5px;margin-top:8px"></div>
@@ -332,6 +334,12 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
 
 initAuth();
+function pwEye(btn,id){
+  const i=$(id), show=i.type==='password'; i.type=show?'text':'password';
+  btn.innerHTML=show
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
 async function onGoogle(resp){
   $('lg_msg').style.color='#ff8a8a';
   const d=await _fetch('/api/auth/google',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({credential:resp.credential})}).then(r=>r.json());
