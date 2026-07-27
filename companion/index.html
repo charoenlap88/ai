@@ -28,7 +28,7 @@
   textarea:focus{outline:none;border-color:var(--pri)}
   #login{position:fixed;inset:0;background:#0f1117;display:flex;align-items:center;justify-content:center;z-index:100}
   #login .box{background:#1a1b2e;border:1px solid #2c2d44;border-radius:16px;padding:26px;width:340px}
-  #login input{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:10px 12px;font:inherit;margin-bottom:8px}
+  #login input,#login select{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:10px 12px;font:inherit;margin-bottom:8px}
   #login input:focus{outline:none;border-color:var(--pri)}
   .hint{color:#8a90a6;font-size:13px;text-align:center;margin:auto}
 </style>
@@ -38,7 +38,10 @@
   <div class="box">
     <h2 style="margin:0 0 4px;font-size:17px">🖥️ Agent Companion</h2>
     <div style="color:#8a90a6;font-size:12px;margin-bottom:14px">ล็อกอินไปที่ server เพื่อใช้ AI (token กลาง)</div>
-    <input id="lg_url" placeholder="Server URL" value="http://localhost:4040">
+    <select id="lg_url">
+      <option value="https://ai.charoenlap.com" selected>https://ai.charoenlap.com (หลัก)</option>
+      <option value="http://localhost:4040">http://localhost:4040 (เครื่องนี้)</option>
+    </select>
     <input id="lg_email" placeholder="email">
     <input id="lg_pass" type="password" placeholder="password">
     <button class="btn pri" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>

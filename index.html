@@ -81,6 +81,10 @@
   #loginView input:focus{outline:none;border-color:var(--pri)}
   .qbar{height:5px;background:#0f1117;border-radius:3px;overflow:hidden;margin-top:3px}
   .qbar>i{display:block;height:100%;background:var(--pri)}
+  .mic{width:52px;height:52px;border-radius:50%;border:none;background:#4d6bff;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s}
+  .mic.listening{background:#e0554e;animation:pulse 1.2s infinite}
+  .mic.speaking{background:#2fae6a;animation:pulse 1s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.45)}70%{box-shadow:0 0 0 18px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
   .utable{width:100%;font-size:12.5px;border-collapse:collapse}
   .utable td,.utable th{padding:6px 5px;border-bottom:1px solid #262a38;text-align:left}
   .badge2{font-size:11px;padding:2px 7px;border-radius:10px}
@@ -124,8 +128,15 @@
     <button class="fb-btn" onclick="openBrowse()">เปลี่ยนโฟลเดอร์</button>
   </div>
   <div class="foot">
+    <button class="send" id="modeBtn" onclick="toggleVoice()" title="สลับโหมดเสียง/พิมพ์" style="background:#1a1e2b">🎤</button>
     <textarea id="inp" placeholder="สั่งงาน... (Enter ส่ง, Shift+Enter ขึ้นบรรทัด)"></textarea>
     <button class="send" id="sendBtn" onclick="send()">ส่ง</button>
+    <div id="voiceBar" style="display:none;flex:1;align-items:center;gap:14px">
+      <button id="micBtn" class="mic" onclick="micTap()" title="แตะเพื่อพูด">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg>
+      </button>
+      <span id="voiceStatus" style="color:#8a90a6">แตะไมค์เพื่อพูด</span>
+    </div>
   </div>
 </div>
 
@@ -284,6 +295,7 @@ async function send(){
       if(result.used!=null&&me){ me.used=result.used; me.quota=result.quota; renderUser(); } // อัปเดต quota
       if(result.actions&&result.actions.length) add('acts', result.actions.join('\n'));
       add('bot', fmt(result.reply)); history.push({role:'assistant',content:result.reply}); saveSession();
+      if(voiceMode) speak(result.reply); // โหมดเสียง → อ่านคำตอบออกเสียง
     }
   }catch(e){ thinking.textContent='❌ '+e.message; }
   $('sendBtn').disabled=false; $('sendBtn').textContent='ส่ง';
@@ -411,6 +423,44 @@ async function initGoogle(){
   }catch{}
 }
 initGoogle();
+// ---- โหมดเสียง (Web Speech API — ฟรี ในเบราว์เซอร์) ----
+let voiceMode=false, recog=null, listening=false;
+function toggleVoice(){
+  voiceMode=!voiceMode;
+  $('modeBtn').textContent=voiceMode?'💬':'🎤';
+  $('inp').style.display=voiceMode?'none':'';
+  $('sendBtn').style.display=voiceMode?'none':'';
+  $('voiceBar').style.display=voiceMode?'flex':'none';
+  if(!voiceMode) stopSpeak();
+}
+function setMic(state){ // '' | 'listening' | 'speaking'
+  const m=$('micBtn'); if(!m) return; m.classList.remove('listening','speaking'); if(state) m.classList.add(state);
+  $('voiceStatus').textContent = state==='listening' ? '🎧 กำลังฟัง... พูดได้เลย' : state==='speaking' ? '🔊 AI กำลังพูด... (แตะเพื่อหยุด)' : 'แตะไมค์เพื่อพูด';
+}
+function micTap(){
+  if(listening){ recog&&recog.stop(); return; }
+  if(window.speechSynthesis&&speechSynthesis.speaking){ stopSpeak(); return; }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ $('voiceStatus').textContent='เบราว์เซอร์นี้ไม่รองรับ (ใช้ Chrome/Edge/Safari)'; return; }
+  recog=new SR(); recog.lang='th-TH'; recog.interimResults=false; recog.maxAlternatives=1;
+  recog.onstart=()=>{ listening=true; setMic('listening'); };
+  recog.onerror=()=>{ listening=false; setMic(''); };
+  recog.onend=()=>{ listening=false; if(!(window.speechSynthesis&&speechSynthesis.speaking)) setMic(''); };
+  recog.onresult=e=>{ const t=e.results[0][0].transcript; $('inp').value=t; send(); };
+  recog.start();
+}
+function speak(text){
+  if(!voiceMode||!window.speechSynthesis) return;
+  stopSpeak();
+  const u=new SpeechSynthesisUtterance(String(text).replace(/[#*`>_\[\]()~]/g,'').slice(0,900));
+  u.lang='th-TH';
+  const v=speechSynthesis.getVoices().find(x=>x.lang&&x.lang.toLowerCase().startsWith('th'));
+  if(v) u.voice=v;
+  u.onstart=()=>setMic('speaking'); u.onend=()=>setMic(''); u.onerror=()=>setMic('');
+  speechSynthesis.speak(u);
+}
+function stopSpeak(){ try{ window.speechSynthesis&&speechSynthesis.cancel(); }catch(e){} setMic(''); }
+if(window.speechSynthesis) speechSynthesis.onvoiceschanged=()=>{}; // โหลดรายชื่อเสียงล่วงหน้า
 </script>
 </body>
 </html>
