@@ -276,6 +276,22 @@ const server = http.createServer(async (req, res) => {
       if (uu.status !== 'approved') return J(res, 403, { error: uu.status === 'pending' ? 'บัญชีรอ admin อนุมัติ' : 'บัญชีถูกระงับ' });
       return J(res, 200, { token: issueToken(uu.id), user: pub(uu) });
     }
+    if (p === '/api/auth/google' && req.method === 'POST') {
+      const CID = process.env.GOOGLE_CLIENT_ID;
+      if (!CID) return J(res, 400, { error: 'ยังไม่ได้ตั้ง GOOGLE_CLIENT_ID บน server' });
+      const b = JSON.parse(await readBody(req) || '{}');
+      if (!b.credential) return J(res, 400, { error: 'ไม่มี credential' });
+      // ยืนยัน ID token กับ Google (ไม่ต้องมี lib) แล้วตรวจว่า aud = client id เรา + email ยืนยันแล้ว
+      const info = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(b.credential)).then(r => r.json()).catch(() => null);
+      const okIss = info && (info.iss === 'accounts.google.com' || info.iss === 'https://accounts.google.com');
+      const okEmail = info && (info.email_verified === true || info.email_verified === 'true');
+      if (!info || info.aud !== CID || !okIss || !okEmail) return J(res, 401, { error: 'ยืนยัน Google ไม่สำเร็จ' });
+      const users = loadUsers(); let u = users.find(x => x.email === info.email);
+      if (!u) { u = { id: 'u' + Date.now(), email: info.email, pass_hash: '', role: 'user', status: 'pending', quota: 0, used: 0, google: true, created: new Date().toISOString() }; users.push(u); saveUsers(users); }
+      if (u.status !== 'approved') return J(res, 403, { error: u.status === 'pending' ? 'บัญชี Google รอ admin อนุมัติ' : 'บัญชีถูกระงับ' });
+      return J(res, 200, { token: issueToken(u.id), user: pub(u) });
+    }
+    if (p === '/api/config') return J(res, 200, { googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
     // ---- ต้อง login สำหรับ /api อื่นๆ ----
     if (p.startsWith('/api/')) {
       if (!me) return J(res, 401, { error: 'ต้อง login ก่อน' });

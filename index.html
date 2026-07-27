@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Agent</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <style>
   :root{--pri:#4d6bff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
   *{box-sizing:border-box}
@@ -161,6 +162,10 @@
     <div id="lg_msg" style="font-size:12.5px;margin-top:8px"></div>
     <div style="font-size:12.5px;margin-top:12px;color:#8a90a6">
       <span id="lg_toggle_txt">ยังไม่มีบัญชี?</span> <a onclick="toggleReg()" style="color:#8ab4ff;cursor:pointer" id="lg_toggle">สมัครสมาชิก</a>
+    </div>
+    <div id="gwrap" style="display:none;margin-top:16px">
+      <div style="display:flex;align-items:center;gap:8px;color:#5a6078;font-size:11.5px;margin-bottom:12px"><span style="flex:1;height:1px;background:#2a2f42"></span>หรือ<span style="flex:1;height:1px;background:#2a2f42"></span></div>
+      <div id="gbtn" style="display:flex;justify-content:center"></div>
     </div>
   </div>
 </div>
@@ -327,6 +332,24 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
 
 initAuth();
+async function onGoogle(resp){
+  $('lg_msg').style.color='#ff8a8a';
+  const d=await _fetch('/api/auth/google',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({credential:resp.credential})}).then(r=>r.json());
+  if(d.error){ $('lg_msg').textContent=d.error; return; }
+  authToken=d.token; localStorage.setItem('dsauth',authToken); me=d.user; enterApp();
+}
+async function initGoogle(){
+  try{
+    const cfg=await fetch('/api/config').then(r=>r.json());
+    if(!cfg.googleClientId) return; // ยังไม่ตั้ง GOOGLE_CLIENT_ID → ซ่อนปุ่ม
+    const start=()=>{ if(!window.google?.accounts?.id) return setTimeout(start,200);
+      google.accounts.id.initialize({client_id:cfg.googleClientId,callback:onGoogle});
+      google.accounts.id.renderButton($('gbtn'),{theme:'filled_black',size:'large',shape:'pill',width:280,text:'signin_with'});
+      $('gwrap').style.display='block';
+    }; start();
+  }catch{}
+}
+initGoogle();
 </script>
 </body>
 </html>
