@@ -195,13 +195,24 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify) {
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
   let totalTokens = 0; // นับ token รวมทุกรอบ (สำหรับ quota)
   for (let i = 0; i < MAX; i++) {
-    onStep && onStep('💭 กำลังคิด (รอบ ' + (i + 1) + ')');
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, messages: msgs, tools: TOOLS, tool_choice: 'auto', max_tokens: 4000 }),
-    });
-    if (!res.ok) throw new Error('DeepSeek ' + res.status + ' ' + (await res.text()).slice(0, 200));
-    const jr = await res.json(); const m = jr.choices[0].message; totalTokens += jr.usage?.total_tokens || 0;
+    onStep && onStep('กำลังคิด... (' + (i + 1) + ')');
+    let jr = null;
+    for (let attempt = 0; attempt < 3; attempt++) { // retry กัน DeepSeek ตอบหลุด/ไม่ครบ (unexpected end of JSON input)
+      const res = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, messages: msgs, tools: TOOLS, tool_choice: 'auto', max_tokens: 8000 }),
+      });
+      const txt = await res.text();
+      if (!res.ok) {
+        if (res.status >= 500 && attempt < 2) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); continue; }
+        throw new Error('DeepSeek ' + res.status + ' ' + txt.slice(0, 200));
+      }
+      try { jr = JSON.parse(txt); } catch { jr = null; }
+      if (jr && jr.choices && jr.choices[0]) break; // ได้คำตอบครบ
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); continue; }
+      throw new Error(jr && jr.error ? ('DeepSeek: ' + (jr.error.message || '')) : 'DeepSeek ตอบไม่สมบูรณ์ — ลองสั่งใหม่อีกครั้ง');
+    }
+    const m = jr.choices[0].message; totalTokens += jr.usage?.total_tokens || 0;
     msgs.push(m);
     if (!m.tool_calls || !m.tool_calls.length) return { reply: m.content || '(ไม่มีข้อความ)', actions: log.items, truncated: false, tokens: totalTokens };
     for (const tc of m.tool_calls) {

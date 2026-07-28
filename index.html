@@ -284,7 +284,7 @@ async function send(){
       while((idx=buf.indexOf('\n'))>=0){
         const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+1); if(!line)continue;
         const ev=JSON.parse(line);
-        if(ev.type==='step'){ steps.push(ev.text); thinking.textContent='⏳ '+steps.slice(-7).join('\n'); $('chat').scrollTop=1e9; }
+        if(ev.type==='step'){ steps.push(ev.text); thinking.textContent=steps[steps.length-1]||'กำลังคิด...'; $('chat').scrollTop=1e9; }
         else if(ev.type==='notify'){ add('bot', fmt(ev.text)); $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } // ข้อความสด (แผน/ความคืบหน้า)
         else if(ev.type==='error'){ throw new Error(ev.error); }
         else if(ev.type==='done'){ result=ev; }
