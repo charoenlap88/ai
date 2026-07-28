@@ -85,6 +85,22 @@
   .mic.listening{background:#e0554e;animation:pulse 1.2s infinite}
   .mic.speaking{background:#2fae6a;animation:pulse 1s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.45)}70%{box-shadow:0 0 0 18px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+  .hamb{display:none;background:none;border:none;color:#e6e8ef;font-size:21px;cursor:pointer;padding:0 2px;line-height:1}
+  #backdrop{display:none}
+  @media(max-width:760px){
+    .side{position:fixed;top:0;bottom:0;left:0;z-index:50;width:82%;max-width:300px;transform:translateX(-100%);transition:transform .25s ease;box-shadow:2px 0 24px rgba(0,0,0,.55)}
+    .side.open{transform:translateX(0)}
+    #backdrop.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:45}
+    .hamb{display:block}
+    header{gap:8px}
+    .dlwrap{order:3;width:100%;justify-content:flex-start;margin-left:0!important;overflow-x:auto}
+    .dllabel{display:none}
+    .warn{display:none!important}
+    .ctrl{flex-wrap:wrap}
+    .foot{padding:8px 10px}
+    #inp{font-size:16px}
+    .modal{width:auto!important;max-width:94vw}
+  }
   .utable{width:100%;font-size:12.5px;border-collapse:collapse}
   .utable td,.utable th{padding:6px 5px;border-bottom:1px solid #262a38;text-align:left}
   .badge2{font-size:11px;padding:2px 7px;border-radius:10px}
@@ -93,6 +109,7 @@
 </style>
 </head>
 <body>
+<div id="backdrop" onclick="toggleSide(false)"></div>
 <aside class="side">
   <div class="sec"><button class="btn pri full" onclick="newChat()">+ แชทใหม่</button>
     <button class="btn full" style="margin-top:6px" onclick="openSched()">⏰ งานตามเวลา</button></div>
@@ -109,10 +126,11 @@
 </aside>
 
 <div class="main">
-  <header style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+  <header style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <button class="hamb" onclick="toggleSide()" aria-label="เมนู">☰</button>
     <span>AI Agent</span>
-    <span style="display:flex;gap:8px;align-items:center">
-      <span style="font-size:12px;color:#8a90a6">โหลดลงเครื่อง:</span>
+    <span class="dlwrap" style="display:flex;gap:8px;align-items:center;margin-left:auto">
+      <span class="dllabel" style="font-size:12px;color:#8a90a6">โหลดลงเครื่อง:</span>
       <a href="/downloads/AI-Agent-win-setup.exe" style="text-decoration:none;background:#1a1e2b;border:1px solid #2a2f42;color:#cdd3e6;font-size:12.5px;padding:6px 12px;border-radius:8px;white-space:nowrap"> Windows</a>
       <a href="/downloads/AI-Agent-mac.dmg" style="text-decoration:none;background:#1a1e2b;border:1px solid #2a2f42;color:#cdd3e6;font-size:12.5px;padding:6px 12px;border-radius:8px;white-space:nowrap"> macOS</a>
     </span>
@@ -260,9 +278,9 @@ async function shareSession(id){
   const d=await fetch('/api/sessions/'+id+'/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,canEdit})}).then(r=>r.json());
   alert(d.error?('❌ '+d.error):('✅ แชร์ให้ '+email+' แล้ว ('+(canEdit?'แก้ไขได้':'ดูอย่างเดียว')+')'));
 }
-async function loadSession(id){ const d = await fetch('/api/sessions/'+id).then(r=>r.json()); history = d.messages||[]; currentId = id; currentRoot = d.root||defaultRoot; renderRoot(); renderHistory(); loadSessions(); }
+async function loadSession(id){ toggleSide(false); const d = await fetch('/api/sessions/'+id).then(r=>r.json()); history = d.messages||[]; currentId = id; currentRoot = d.root||defaultRoot; renderRoot(); renderHistory(); loadSessions(); }
 async function delSession(id){ if(!confirm('ลบแชทนี้?'))return; await fetch('/api/sessions/'+id,{method:'DELETE'}); if(id===currentId) newChat(); loadSessions(); }
-function newChat(){ history=[]; currentId=null; currentRoot=defaultRoot; renderRoot(); $('chat').innerHTML='<div class="hint">แชทใหม่ — พิมพ์สั่งงานได้เลย</div>'; loadSessions(); }
+function newChat(){ toggleSide(false); history=[]; currentId=null; currentRoot=defaultRoot; renderRoot(); $('chat').innerHTML='<div class="hint">แชทใหม่ — พิมพ์สั่งงานได้เลย</div>'; loadSessions(); }
 async function saveSession(){ const title = (history.find(m=>m.role==='user')||{}).content || 'แชทใหม่'; const d = await fetch('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:currentId,title,messages:history,root:currentRoot})}).then(r=>r.json()); currentId = d.id; loadSessions(); }
 
 // ---- chat ----
@@ -353,6 +371,10 @@ function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot
   for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
 }
 function toggleUserMenu(force){ const m=$('userMenu'); if(force===false) m.classList.remove('on'); else m.classList.toggle('on'); }
+function toggleSide(force){ const s=document.querySelector('.side'), b=$('backdrop');
+  const open = force===undefined ? !s.classList.contains('open') : force;
+  s.classList.toggle('open', open); b.classList.toggle('on', open);
+}
 document.addEventListener('click', e=>{ if(!e.target.closest('.userzone')) $('userMenu').classList.remove('on'); });
 function renderUser(){
   const admin = me.role==='admin';
