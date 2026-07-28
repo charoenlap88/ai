@@ -200,10 +200,10 @@
 </div>
 
 <div class="overlay" id="ovProfile" onclick="if(event.target===this)$('ovProfile').classList.remove('on')">
-  <div class="modal" style="width:420px">
+  <div class="modal" style="width:380px">
     <h3>👤 โปรไฟล์</h3>
     <div id="profileBody"></div>
-    <div class="mfoot"><button class="btn" onclick="$('ovProfile').classList.remove('on')">ปิด</button></div>
+    <div class="mfoot" style="justify-content:stretch"><button class="btn pri" style="flex:1" onclick="$('ovProfile').classList.remove('on')">ปิด</button></div>
   </div>
 </div>
 
@@ -389,13 +389,25 @@ function renderUser(){
   $('menuAdmin').style.display = admin?'block':'none';
 }
 function openProfile(){
-  const pct = me.quota>0 ? Math.min(100, Math.round((me.used/me.quota)*100)) : 0;
-  const left = me.quota>0 ? Math.max(0, me.quota-(me.used||0)) : null;
+  const has = me.quota>0;
+  const pct = has ? Math.min(100, Math.round((me.used/me.quota)*100)) : 0;
+  const left = has ? Math.max(0, me.quota-(me.used||0)) : null;
+  const initial = ((me.email||'?').trim()[0]||'?').toUpperCase();
   $('profileBody').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div><div class="lbl">อีเมล</div><div style="font-size:15px">${esc(me.email)} ${me.role==='admin'?'👑 admin':''}</div></div>
-      <div><div class="lbl">Token ที่ใช้ไป</div><div style="font-size:15px">${fmtN(me.used)}${me.quota>0?(' / '+fmtN(me.quota)):' (ไม่จำกัด)'}</div></div>
-      ${me.quota>0?`<div class="qbar" style="height:8px"><i style="width:${pct}%"></i></div><div class="lbl">เหลือ ${fmtN(left)} token</div>`:''}
+    <div style="padding:24px 20px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div class="uava" style="width:66px;height:66px;font-size:27px">${esc(initial)}</div>
+      <div style="text-align:center">
+        <div style="font-size:15px;font-weight:600;word-break:break-all">${esc(me.email)}</div>
+        <div style="font-size:12px;color:#8a90a6;margin-top:3px">${me.role==='admin'?'👑 admin':'ผู้ใช้'}</div>
+      </div>
+      <div style="width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:15px;margin-top:4px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;color:#8a90a6">
+          <span>Token ที่ใช้ไป</span><span>${has?pct+'%':'ไม่จำกัด'}</span>
+        </div>
+        <div style="font-size:22px;font-weight:700;margin:4px 0 ${has?'10px':'0'}">${fmtN(me.used)}${has?` <span style="font-size:13px;color:#8a90a6;font-weight:400">/ ${fmtN(me.quota)}</span>`:''}</div>
+        ${has?`<div class="qbar" style="height:9px"><i style="width:${pct}%"></i></div>
+          <div style="font-size:12px;color:#8a90a6;margin-top:9px">เหลืออีก <b style="color:#e6e8ef">${fmtN(left)}</b> token</div>`:''}
+      </div>
     </div>`;
   $('ovProfile').classList.add('on');
 }
