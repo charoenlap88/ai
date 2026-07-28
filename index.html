@@ -1,9 +1,16 @@
 <!doctype html>
 <html lang="th">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AI Agent</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234d6bff'/%3E%3Cpath d='M16 5.5l2.4 6.1 6.1 2.4-6.1 2.4L16 22.5l-2.4-6.1L7.5 14l6.1-2.4z' fill='%23fff'/%3E%3Ccircle cx='24.5' cy='8' r='2' fill='%23a9b8ff'/%3E%3C/svg%3E">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#12141d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AI Agent">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <style>
   :root{--pri:#4d6bff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -25,7 +32,7 @@
   .uava{width:30px;height:30px;border-radius:50%;background:#4d6bff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
   .usermenu{position:absolute;bottom:calc(100% - 2px);left:8px;right:8px;background:#1a1e2b;border:1px solid #2a2f42;border-radius:11px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.45);display:none;flex-direction:column;gap:2px;z-index:20}
   .usermenu.on{display:flex}
-  .usermenu button{background:none;border:none;color:#cdd3e6;text-align:left;padding:10px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:13.5px}
+  .usermenu button{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;color:#cdd3e6;text-align:left;padding:10px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:13.5px}
   .usermenu button:hover{background:#262b3d}
   .sitem{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
   .sitem:hover{background:#1b2030}
@@ -34,7 +41,7 @@
   .sitem .x{opacity:.4;font-size:12px}.sitem .x:hover{opacity:1;color:#ff8a8a}
   /* main */
   .main{flex:1;display:flex;flex-direction:column;min-width:0}
-  header{background:#171a24;border-bottom:1px solid #262a38;padding:9px 16px;font-size:14px;font-weight:600}
+  header{background:#171a24;border-bottom:1px solid #262a38;padding:max(9px,env(safe-area-inset-top)) 16px 9px;font-size:14px;font-weight:600}
   .warn{background:#3a2410;color:#ffcf8a;font-size:11.5px;padding:5px 16px;border-bottom:1px solid #4a3418}
   .ctrl{display:flex;align-items:center;gap:8px;padding:7px 16px;background:#141722;border-bottom:1px solid #262a38;font-size:13px}
   .ctrl label{display:flex;align-items:center;gap:6px;cursor:pointer}
@@ -47,7 +54,7 @@
   .folderbar .fb-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0f1117;border:1px solid #262a38;border-radius:7px;padding:5px 9px}
   .folderbar .fb-btn{flex:none;background:#232838;color:#dfe3f0;border:1px solid #313850;border-radius:7px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
   .folderbar .fb-btn:hover{background:#2b3247}
-  .foot{border-top:1px solid #262a38;padding:10px 16px;display:flex;gap:8px;background:#141722}
+  .foot{border-top:1px solid #262a38;padding:10px 16px max(10px,env(safe-area-inset-bottom));display:flex;gap:8px;background:#141722}
   textarea{flex:1;resize:none;background:#0f1117;border:1px solid #2a2f42;border-radius:10px;color:#fff;padding:10px 12px;font:inherit;font-size:14px;height:46px}
   textarea:focus{outline:none;border-color:var(--pri)}
   #inp::placeholder{font-size:13px;color:#6b7288}
@@ -66,6 +73,7 @@
   .modal{background:#171a24;border:1px solid #2a2f42;border-radius:14px;width:520px;max-width:92vw;max-height:80vh;max-height:80dvh;display:flex;flex-direction:column}
   .modal h3{margin:0;padding:14px 16px;border-bottom:1px solid #262a38;font-size:15px}
   .modal .cur{padding:8px 16px;font-size:12px;color:#a9b0c6;word-break:break-all;border-bottom:1px solid #20242f}
+  .mbody{flex:1;overflow:auto;padding:16px}
   .dl{flex:1;overflow-y:auto;padding:8px}
   .dl div{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
   .dl div:hover{background:#22283a}
@@ -113,22 +121,18 @@
 <div id="backdrop" onclick="toggleSide(false)"></div>
 <aside class="side">
   <div class="sec"><button class="btn pri full" onclick="newChat()">+ แชทใหม่</button>
-    <button class="btn full" style="margin-top:6px" onclick="openSched()">⏰ งานตามเวลา</button></div>
+    <button class="btn full" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px" onclick="openSched()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> งานตามเวลา</button></div>
   <div class="lbl" style="padding:8px 12px 0">ประวัติ</div>
   <div class="sess" id="sessList"></div>
   <div class="userzone">
-    <div class="usermenu" id="userMenu">
-      <button onclick="openProfile();toggleUserMenu(false)">👤 โปรไฟล์</button>
-      <button id="menuAdmin" style="display:none" onclick="openAdmin();toggleUserMenu(false)">📊 Token ผู้ใช้ / Admin</button>
-      <button onclick="logout()" style="color:#ff9a9a">🚪 ออกจากระบบ</button>
-    </div>
+    <div class="usermenu" id="userMenu"></div>
     <button class="userbtn" id="userbtn" onclick="toggleUserMenu()"></button>
   </div>
 </aside>
 
 <div class="main">
   <header style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <button class="hamb" onclick="toggleSide()" aria-label="เมนู">☰</button>
+    <button class="hamb" onclick="toggleSide()" aria-label="เมนู"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
     <span>AI Agent</span>
     <span class="dlwrap" style="display:flex;gap:8px;align-items:center;margin-left:auto">
       <span class="dllabel" style="font-size:12px;color:#8a90a6">โหลดลงเครื่อง:</span>
@@ -138,16 +142,16 @@
   </header>
   <div class="warn" id="warnBar">⚠️ AI อ่าน/แก้ไฟล์ + เข้าเน็ตได้ · แก้ไฟล์ต้องติ๊กอนุญาต · backup ที่ .ds-backups/ · localhost เท่านั้น</div>
   <div class="ctrl" id="ctrlBar">
-    <label><input type="checkbox" id="allowWrite" checked> ✏️ อนุญาตให้แก้ไฟล์</label>
-    <label style="color:#ffb98a"><input type="checkbox" id="allowShell"> ⌨️ อนุญาตรันคำสั่ง (อันตราย)</label>
+    <label style="display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="allowWrite" checked> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> อนุญาตให้แก้ไฟล์</label>
+    <label style="color:#ffb98a;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="allowShell"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> อนุญาตรันคำสั่ง (อันตราย)</label>
   </div>
   <div id="chat"><div class="hint">พิมพ์สั่งงาน เช่น "อ่าน server.js สรุปให้หน่อย" · "ค้นเน็ตว่า X คืออะไร" · (เปิดแก้ไฟล์) "เพิ่ม endpoint /ping"</div></div>
   <div class="folderbar" id="folderBar">
-    <span class="fb-ic">📁</span><span class="fb-path" id="rootbox">...</span>
+    <span class="fb-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="fb-path" id="rootbox">...</span>
     <button class="fb-btn" onclick="openBrowse()">เปลี่ยนโฟลเดอร์</button>
   </div>
   <div class="foot">
-    <button class="send" id="modeBtn" onclick="toggleVoice()" title="สลับโหมดเสียง/พิมพ์" style="background:#1a1e2b">🎤</button>
+    <button class="send" id="modeBtn" onclick="toggleVoice()" title="สลับโหมดเสียง/พิมพ์" style="background:#1a1e2b;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg></button>
     <textarea id="inp" placeholder="สั่งงาน... (Enter ส่ง, Shift+Enter ขึ้นบรรทัด)"></textarea>
     <button class="send" id="sendBtn" onclick="send()">ส่ง</button>
     <div id="voiceBar" style="display:none;flex:1;align-items:center;gap:14px">
@@ -164,13 +168,13 @@
     <h3>เลือกโฟลเดอร์</h3>
     <div class="cur" id="curPath"></div>
     <div class="dl" id="dirList"></div>
-    <div class="mfoot"><button class="btn" onclick="closeBrowse()">ยกเลิก</button><button class="btn pri" onclick="useFolder()">✅ ใช้โฟลเดอร์นี้</button></div>
+    <div class="mfoot"><button class="btn" onclick="closeBrowse()">ยกเลิก</button><button class="btn pri" onclick="useFolder()">ใช้โฟลเดอร์นี้</button></div>
   </div>
 </div>
 
 <div class="overlay" id="ovSched" onclick="if(event.target===this)closeSched()">
   <div class="modal">
-    <h3>⏰ งานตามเวลา (Scheduled)</h3>
+    <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> งานตามเวลา (Scheduled)</h3>
     <div class="cur">งานจะรันในโฟลเดอร์ของ session ปัจจุบัน · ผลเก็บใน "ประวัติ"</div>
     <div style="padding:12px 16px;overflow:auto">
       <label>คำสั่งงาน</label>
@@ -183,12 +187,12 @@
         <button onclick="setAt(30)">+30 นาที</button>
         <button onclick="setAt(60)">+1 ชม.</button>
         <button onclick="setTomorrow(9)">พรุ่งนี้ 09:00</button>
-        <button onclick="setEvery(60)">🔁 ทุกชม.</button>
-        <button onclick="setEvery(1440)">🔁 ทุกวัน</button>
+        <button onclick="setEvery(60)">ทุกชม.</button>
+        <button onclick="setEvery(1440)">ทุกวัน</button>
       </div>
       <div style="display:flex;gap:16px;margin:8px 0;font-size:13px">
-        <label style="display:flex;gap:6px;cursor:pointer"><input type="checkbox" id="sc_write"> ✏️ แก้ไฟล์</label>
-        <label style="display:flex;gap:6px;cursor:pointer"><input type="checkbox" id="sc_shell"> ⌨️ รันคำสั่ง</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="sc_write"> แก้ไฟล์</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="sc_shell"> รันคำสั่ง</label>
       </div>
       <button class="btn pri" onclick="addSched()">+ เพิ่มงาน</button>
       <span id="sc_msg" style="font-size:12px;margin-left:8px;color:#7fd0a0"></span>
@@ -201,7 +205,7 @@
 
 <div class="overlay" id="ovProfile" onclick="if(event.target===this)$('ovProfile').classList.remove('on')">
   <div class="modal" style="width:380px">
-    <h3>👤 โปรไฟล์</h3>
+    <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> โปรไฟล์</h3>
     <div id="profileBody"></div>
     <div class="mfoot" style="justify-content:stretch"><button class="btn pri" style="flex:1" onclick="$('ovProfile').classList.remove('on')">ปิด</button></div>
   </div>
@@ -232,8 +236,8 @@
 
 <div class="overlay" id="ovAdmin" onclick="if(event.target===this)$('ovAdmin').classList.remove('on')">
   <div class="modal" style="width:640px">
-    <h3>👑 Admin — จัดการผู้ใช้ & quota</h3>
-    <div class="dl" style="padding:12px 16px"><div id="userList"></div></div>
+    <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffce5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16M4 8l4 4 4-7 4 7 4-4-1.5 10h-13z"/></svg> Admin — จัดการผู้ใช้ &amp; quota</h3>
+    <div class="mbody"><div id="userList"></div></div>
     <div class="mfoot"><button class="btn" onclick="$('ovAdmin').classList.remove('on')">ปิด</button></div>
   </div>
 </div>
@@ -261,17 +265,17 @@ let history = [], currentId = null, browsePath = '', defaultRoot = '', currentRo
 // ---- root / folder ----
 async function loadRoot(){ const d = await fetch('/api/root').then(r=>r.json()); defaultRoot=d.root; if(!currentRoot) currentRoot=d.root; noKey=!d.hasKey; renderRoot(); }
 function renderRoot(){ $('rootbox').innerHTML = esc(currentRoot) + (noKey?' <span style="color:#ff8a8a">(ไม่มี key)</span>':''); }
-async function openBrowse(path){ const d = await fetch('/api/browse?path='+encodeURIComponent(path||'')).then(r=>r.json()); if(d.error) return alert(d.error); browsePath=d.path; $('curPath').textContent='📁 '+d.path; $('dirList').innerHTML='<div onclick="openBrowse(\''+d.parent.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">📁 .. (ขึ้นบน)</div>'+d.dirs.map(n=>`<div onclick="openBrowse('${(d.path+'/'+n).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">📁 ${esc(n)}</div>`).join(''); $('ov').classList.add('on'); }
+async function openBrowse(path){ const d = await fetch('/api/browse?path='+encodeURIComponent(path||'')).then(r=>r.json()); if(d.error) return alert(d.error); browsePath=d.path; $('curPath').innerHTML=ic('folder',14)+' '+esc(d.path); $('dirList').innerHTML='<div onclick="openBrowse(\''+d.parent.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+ic('folder',14)+' .. (ขึ้นบน)</div>'+d.dirs.map(n=>`<div onclick="openBrowse('${(d.path+'/'+n).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${ic('folder',14)} ${esc(n)}</div>`).join(''); $('ov').classList.add('on'); }
 function closeBrowse(){ $('ov').classList.remove('on'); }
 function useFolder(){ currentRoot=browsePath; renderRoot(); closeBrowse(); } // ตั้ง root ของ session ปัจจุบัน (ไม่ global)
 
 // ---- sessions ----
 async function loadSessions(){ const list = await fetch('/api/sessions').then(r=>r.json());
   $('sessList').innerHTML = list.map(s=>`<div class="sitem ${s.id===currentId?'active':''}" onclick="loadSession('${s.id}')">
-    <span class="t">${s.mine?'':'👥 '}${esc(s.title)}</span>
+    <span class="t">${s.mine?'':ic('users',13)+' '}${esc(s.title)}</span>
     ${s.mine
-      ? `<span class="x" title="แชร์" onclick="event.stopPropagation();shareSession('${s.id}')">👤﹢</span><span class="x" title="ลบ" onclick="event.stopPropagation();delSession('${s.id}')">✕</span>`
-      : `<span class="x" title="แชร์กับฉัน${s.canEdit?' (แก้ได้)':' (ดูอย่างเดียว)'}">${s.canEdit?'✏️':'👁️'}</span>`}
+      ? `<span class="x" title="แชร์" onclick="event.stopPropagation();shareSession('${s.id}')">${ic('userplus',15)}</span><span class="x" title="ลบ" onclick="event.stopPropagation();delSession('${s.id}')">✕</span>`
+      : `<span class="x" title="แชร์กับฉัน${s.canEdit?' (แก้ได้)':' (ดูอย่างเดียว)'}">${s.canEdit?ic('edit',14):ic('eye',14)}</span>`}
   </div>`).join('') || '<div class="hint" style="font-size:12px;padding:10px">ยังไม่มีประวัติ</div>'; }
 async function shareSession(id){
   const email=prompt('แชร์ session ให้ (อีเมลผู้ใช้ในระบบ):'); if(!email)return;
@@ -367,6 +371,27 @@ async function initAuth(){
   catch{ authToken=''; localStorage.removeItem('dsauth'); $('loginView').style.display='flex'; }
 }
 const fmtN=n=>(+n||0).toLocaleString();
+const ICO={
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  chart:'<path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  crown:'<path d="M4 18h16M4 8l4 4 4-7 4 7 4-4-1.5 10h-13z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/>',
+  chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  terminal:'<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  ban:'<circle cx="12" cy="12" r="9"/><path d="M5 5l14 14"/>',
+  speaker:'<path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  users:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-1a5 5 0 0 1 10 0v1"/><path d="M16 7.5a3 3 0 0 1 0 5"/>',
+  userplus:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-1a5 5 0 0 1 10 0v1"/><path d="M18 8v6M15 11h6"/>',
+  eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
+};
+function ic(name,size){ size=size||16; return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0">${ICO[name]||''}</svg>`; }
+const crownBadge = s => `<span style="color:#ffce5a" title="admin">${ic('crown',s||14)}</span>`;
 function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions();
   const admin = me.role==='admin';
   for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
@@ -382,11 +407,14 @@ function renderUser(){
   const initial = ((me.email||'?').trim()[0]||'?').toUpperCase();
   $('userbtn').innerHTML = `<span class="uava">${esc(initial)}</span>
     <span style="flex:1;min-width:0;line-height:1.3">
-      <span style="display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(me.email)} ${admin?'👑':''}</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:13px;overflow:hidden"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(me.email)}</span>${admin?crownBadge():''}</span>
       <span style="display:block;font-size:11px;color:#8a90a6">token: ${fmtN(me.used)}${me.quota>0?(' / '+fmtN(me.quota)):' · ไม่จำกัด'}</span>
     </span>
     <span style="color:#8a90a6;flex-shrink:0">▾</span>`;
-  $('menuAdmin').style.display = admin?'block':'none';
+  $('userMenu').innerHTML =
+    `<button onclick="openProfile();toggleUserMenu(false)">${ic('user')} โปรไฟล์</button>`+
+    (admin?`<button onclick="openAdmin();toggleUserMenu(false)">${ic('chart')} Token ผู้ใช้ / Admin</button>`:'')+
+    `<button onclick="logout()" style="color:#ff9a9a">${ic('logout')} ออกจากระบบ</button>`;
 }
 function openProfile(){
   const has = me.quota>0;
@@ -398,7 +426,7 @@ function openProfile(){
       <div class="uava" style="width:66px;height:66px;font-size:27px">${esc(initial)}</div>
       <div style="text-align:center">
         <div style="font-size:15px;font-weight:600;word-break:break-all">${esc(me.email)}</div>
-        <div style="font-size:12px;color:#8a90a6;margin-top:3px">${me.role==='admin'?'👑 admin':'ผู้ใช้'}</div>
+        <div style="font-size:12px;color:#8a90a6;margin-top:3px;display:flex;align-items:center;justify-content:center;gap:5px">${me.role==='admin'?crownBadge(13)+' admin':'ผู้ใช้'}</div>
       </div>
       <div style="width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:15px;margin-top:4px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;color:#8a90a6">
@@ -414,21 +442,22 @@ function openProfile(){
 async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetch('/api/users').then(r=>r.json());
   const totUsed=a.reduce((s,x)=>s+(x.used||0),0), unlimited=a.filter(x=>!(x.quota>0)).length;
   const totQuota=a.reduce((s,x)=>s+(x.quota>0?x.quota:0),0);
-  $('userList').innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">ผู้ใช้ทั้งหมด</div><div style="font-size:19px;font-weight:600">${a.length}</div></div>
-      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Token ใช้ไปรวม</div><div style="font-size:19px;font-weight:600">${fmtN(totUsed)}</div></div>
-      <div style="flex:1;min-width:110px;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;padding:10px"><div class="lbl">Quota รวม (จำกัด)</div><div style="font-size:19px;font-weight:600">${fmtN(totQuota)}</div><div class="lbl">+ ${unlimited} คนไม่จำกัด</div></div>
+  const card=(l,v,sub)=>`<div style="background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px"><div class="lbl">${l}</div><div style="font-size:20px;font-weight:700;margin-top:2px">${v}</div>${sub?`<div class="lbl" style="margin-top:2px">${sub}</div>`:''}</div>`;
+  $('userList').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:14px">
+      ${card('ผู้ใช้ทั้งหมด',a.length)}
+      ${card('Token ใช้ไปรวม',fmtN(totUsed))}
+      ${card('Quota รวม (จำกัด)',fmtN(totQuota),'+ '+unlimited+' คนไม่จำกัด')}
     </div>`+
-   `<table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
-   a.map(x=>`<tr><td>${esc(x.email)} ${x.role==='admin'?'👑':''}</td>
+   `<div style="overflow-x:auto"><table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
+   a.map(x=>`<tr><td style="white-space:nowrap">${esc(x.email)} ${x.role==='admin'?crownBadge(13):''}</td>
      <td><span class="badge2 ${x.status}">${x.status}</span></td>
      <td>${fmtN(x.used)}</td>
-     <td><input value="${x.quota||0}" id="q_${x.id}" style="width:90px;background:#0f1117;border:1px solid #2a2f42;color:#fff;border-radius:6px;padding:3px 6px"></td>
+     <td><input value="${x.quota||0}" id="q_${x.id}" style="width:88px;background:#0f1117;border:1px solid #2a2f42;color:#fff;border-radius:6px;padding:4px 7px"></td>
      <td style="white-space:nowrap">
-       ${x.status!=='approved'?`<button class="btn" onclick="setUser('${x.id}',{status:'approved',quota:+document.getElementById('q_${x.id}').value})">✅ อนุมัติ</button>`:`<button class="btn" onclick="setUser('${x.id}',{quota:+document.getElementById('q_${x.id}').value})">💾</button>`}
-       ${x.status==='approved'&&x.role!=='admin'?`<button class="btn" style="color:#ff8a8a" onclick="setUser('${x.id}',{status:'disabled'})">ระงับ</button>`:''}
-       ${x.status==='disabled'?`<button class="btn" onclick="setUser('${x.id}',{status:'approved'})">คืนสิทธิ์</button>`:''}
-     </td></tr>`).join('')+`</table><div style="color:#8a90a6;font-size:11.5px;margin-top:8px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกด อนุมัติ/💾</div>`;
+       ${x.status!=='approved'?`<button class="btn" title="อนุมัติ" onclick="setUser('${x.id}',{status:'approved',quota:+document.getElementById('q_${x.id}').value})">${ic('check',15)}</button>`:`<button class="btn" title="บันทึก quota" onclick="setUser('${x.id}',{quota:+document.getElementById('q_${x.id}').value})">${ic('save',15)}</button>`}
+       ${x.status==='approved'&&x.role!=='admin'?`<button class="btn" style="color:#ff8a8a" title="ระงับ" onclick="setUser('${x.id}',{status:'disabled'})">${ic('ban',15)}</button>`:''}
+       ${x.status==='disabled'?`<button class="btn" title="คืนสิทธิ์" onclick="setUser('${x.id}',{status:'approved'})">${ic('check',15)}</button>`:''}
+     </td></tr>`).join('')+`</table></div><div class="lbl" style="margin-top:10px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกดบันทึก</div>`;
 }
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
 
@@ -462,7 +491,7 @@ initGoogle();
 let voiceMode=false, recog=null, listening=false;
 function toggleVoice(){
   voiceMode=!voiceMode;
-  $('modeBtn').textContent=voiceMode?'💬':'🎤';
+  $('modeBtn').innerHTML=voiceMode?ic('chat',20):ic('mic',20);
   $('inp').style.display=voiceMode?'none':'';
   $('sendBtn').style.display=voiceMode?'none':'';
   $('voiceBar').style.display=voiceMode?'flex':'none';
@@ -470,7 +499,7 @@ function toggleVoice(){
 }
 function setMic(state){ // '' | 'listening' | 'speaking'
   const m=$('micBtn'); if(!m) return; m.classList.remove('listening','speaking'); if(state) m.classList.add(state);
-  $('voiceStatus').textContent = state==='listening' ? '🎧 กำลังฟัง... พูดได้เลย' : state==='speaking' ? '🔊 AI กำลังพูด... (แตะเพื่อหยุด)' : 'แตะไมค์เพื่อพูด';
+  $('voiceStatus').innerHTML = state==='listening' ? ic('mic',15)+' กำลังฟัง... พูดได้เลย' : state==='speaking' ? ic('speaker',15)+' AI กำลังพูด... (แตะเพื่อหยุด)' : 'แตะไมค์เพื่อพูด';
 }
 function micTap(){
   if(listening){ recog&&recog.stop(); return; }
