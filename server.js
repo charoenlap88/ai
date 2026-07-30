@@ -324,6 +324,7 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse(await readBody(req) || '{}'); const users = loadUsers(); const t = users.find(x => x.id === m[1]);
       if (!t) return J(res, 404, { error: 'not found' });
       if (b.status) t.status = b.status; if (b.quota != null) t.quota = Number(b.quota); if (b.role) t.role = b.role;
+      if (b.password) { if (String(b.password).length < 4) return J(res, 400, { error: 'รหัสผ่านสั้นเกินไป (อย่างน้อย 4 ตัว)' }); t.pass_hash = hashPw(String(b.password)); } // admin รีเซ็ตรหัส
       saveUsers(users); return J(res, 200, pub(t));
     }
     // ---- โฟลเดอร์ ----

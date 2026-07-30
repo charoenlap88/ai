@@ -390,6 +390,7 @@ const ICO={
   users:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-1a5 5 0 0 1 10 0v1"/><path d="M16 7.5a3 3 0 0 1 0 5"/>',
   userplus:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-1a5 5 0 0 1 10 0v1"/><path d="M18 8v6M15 11h6"/>',
   eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
+  key:'<circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 20 3m-3.5 3.5 2 2m-4.5 0 2 2"/>',
 };
 function ic(name,size){ size=size||16; return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0">${ICO[name]||''}</svg>`; }
 const crownBadge = s => `<span style="color:#ffce5a" title="admin">${ic('crown',s||14)}</span>`;
@@ -458,9 +459,15 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
        ${x.status!=='approved'?`<button class="btn" title="อนุมัติ" onclick="setUser('${x.id}',{status:'approved',quota:+document.getElementById('q_${x.id}').value})">${ic('check',15)}</button>`:`<button class="btn" title="บันทึก quota" onclick="setUser('${x.id}',{quota:+document.getElementById('q_${x.id}').value})">${ic('save',15)}</button>`}
        ${x.status==='approved'&&x.role!=='admin'?`<button class="btn" style="color:#ff8a8a" title="ระงับ" onclick="setUser('${x.id}',{status:'disabled'})">${ic('ban',15)}</button>`:''}
        ${x.status==='disabled'?`<button class="btn" title="คืนสิทธิ์" onclick="setUser('${x.id}',{status:'approved'})">${ic('check',15)}</button>`:''}
+       <button class="btn" title="รีเซ็ตรหัสผ่าน" onclick="resetPw('${x.id}','${esc(x.email)}')">${ic('key',15)}</button>
      </td></tr>`).join('')+`</table></div><div class="lbl" style="margin-top:10px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกดบันทึก</div>`;
 }
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
+async function resetPw(id,email){
+  const pw=prompt('ตั้งรหัสผ่านใหม่ให้ '+email+' (อย่างน้อย 4 ตัว):'); if(!pw) return;
+  const d=await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw})}).then(r=>r.json());
+  alert(d.error ? d.error : ('ตั้งรหัสผ่านใหม่ให้ '+email+' แล้ว'));
+}
 
 initAuth();
 function pwEye(btn,id){
