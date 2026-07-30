@@ -48,6 +48,8 @@
   #chat{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;display:flex;flex-direction:column;gap:11px}
   .msg{max-width:min(820px,100%);padding:11px 14px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:14px}
   .msg a{word-break:break-all}
+  .thchip{display:flex;align-items:center;gap:6px;width:fit-content;margin-top:9px;background:#0f1117;border:1px solid #2a2f42;color:#8a90a6;font-size:11.5px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:inherit}
+  .thchip:hover{border-color:var(--pri);color:#cdd3e6}
   .user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
   .bot{align-self:flex-start;background:#1c2030;border:1px solid #2a2f42;border-bottom-left-radius:4px}
   .acts{align-self:flex-start;font-size:11.5px;color:#7fd0a0;background:#0e1710;border:1px solid #1e3020;border-radius:8px;padding:6px 10px;white-space:pre-wrap;font-family:ui-monospace,monospace}
@@ -204,6 +206,14 @@
   </div>
 </div>
 
+<div class="overlay" id="ovThink" onclick="if(event.target===this)$('ovThink').classList.remove('on')">
+  <div class="modal" style="width:560px">
+    <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg> ขั้นตอนการคิด</h3>
+    <div class="mbody" id="thinkBody"></div>
+    <div class="mfoot"><button class="btn" onclick="$('ovThink').classList.remove('on')">ปิด</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="ovProfile" onclick="if(event.target===this)$('ovProfile').classList.remove('on')">
   <div class="modal" style="width:380px">
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> โปรไฟล์</h3>
@@ -261,7 +271,7 @@ function fmt(text){
   return html + inlineFmt(text.slice(last));
 }
 function copyCode(btn){ navigator.clipboard.writeText(decodeURIComponent(btn.dataset.c)); const o = btn.textContent; btn.textContent = '✅ คัดลอกแล้ว'; setTimeout(() => btn.textContent = o, 1200); }
-let history = [], currentId = null, browsePath = '', defaultRoot = '', currentRoot = '', noKey = false;
+let history = [], currentId = null, browsePath = '', defaultRoot = '', currentRoot = '', noKey = false, thoughts = {};
 
 // ---- root / folder ----
 async function loadRoot(){ const d = await fetch('/api/root').then(r=>r.json()); defaultRoot=d.root; if(!currentRoot) currentRoot=d.root; noKey=!d.hasKey; renderRoot(); }
@@ -284,14 +294,16 @@ async function shareSession(id){
   const d=await fetch('/api/sessions/'+id+'/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,canEdit})}).then(r=>r.json());
   alert(d.error?('❌ '+d.error):('✅ แชร์ให้ '+email+' แล้ว ('+(canEdit?'แก้ไขได้':'ดูอย่างเดียว')+')'));
 }
-async function loadSession(id){ toggleSide(false); const d = await fetch('/api/sessions/'+id).then(r=>r.json()); history = d.messages||[]; currentId = id; currentRoot = d.root||defaultRoot; renderRoot(); renderHistory(); loadSessions(); }
+async function loadSession(id){ toggleSide(false); const d = await fetch('/api/sessions/'+id).then(r=>r.json()); history = d.messages||[]; thoughts = d.thoughts||{}; currentId = id; currentRoot = d.root||defaultRoot; renderRoot(); renderHistory(); loadSessions(); }
 async function delSession(id){ if(!confirm('ลบแชทนี้?'))return; await fetch('/api/sessions/'+id,{method:'DELETE'}); if(id===currentId) newChat(); loadSessions(); }
-function newChat(){ toggleSide(false); history=[]; currentId=null; currentRoot=defaultRoot; renderRoot(); $('chat').innerHTML='<div class="hint">แชทใหม่ — พิมพ์สั่งงานได้เลย</div>'; loadSessions(); }
-async function saveSession(){ const title = (history.find(m=>m.role==='user')||{}).content || 'แชทใหม่'; const d = await fetch('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:currentId,title,messages:history,root:currentRoot})}).then(r=>r.json()); currentId = d.id; loadSessions(); }
+function newChat(){ toggleSide(false); history=[]; thoughts={}; currentId=null; currentRoot=defaultRoot; renderRoot(); $('chat').innerHTML='<div class="hint">แชทใหม่ — พิมพ์สั่งงานได้เลย</div>'; loadSessions(); }
+async function saveSession(){ const title = (history.find(m=>m.role==='user')||{}).content || 'แชทใหม่'; const d = await fetch('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:currentId,title,messages:history,thoughts,root:currentRoot})}).then(r=>r.json()); currentId = d.id; loadSessions(); }
 
 // ---- chat ----
 function add(cls, html){ const d=document.createElement('div'); d.className='msg '+cls; d.innerHTML=html; $('chat').appendChild(d); $('chat').scrollTop=1e9; return d; }
-function renderHistory(){ $('chat').innerHTML=''; history.forEach(m=>add(m.role==='user'?'user':'bot', m.role==='user'?esc(m.content):fmt(m.content))); if(!history.length) $('chat').innerHTML='<div class="hint">ว่าง</div>'; }
+function renderHistory(){ $('chat').innerHTML=''; history.forEach((m,i)=>{ const el=add(m.role==='user'?'user':'bot', m.role==='user'?esc(m.content):fmt(m.content)); if(m.role!=='user'&&thoughts[i]&&thoughts[i].length) el.appendChild(thoughtChip(i)); }); if(!history.length) $('chat').innerHTML='<div class="hint">ว่าง</div>'; }
+function thoughtChip(id){ const b=document.createElement('button'); b.className='thchip'; b.innerHTML=ic('brain',13)+' ดูขั้นตอนการคิด ('+(thoughts[id]?thoughts[id].length:0)+')'; b.onclick=()=>showThoughts(id); return b; }
+function showThoughts(id){ const list=thoughts[id]||[]; $('thinkBody').innerHTML = list.length ? list.map((s,i)=>`<div style="display:flex;gap:9px;padding:8px 4px;border-bottom:1px solid #20242f;font-size:13px"><span style="color:#5a6078;flex-shrink:0;min-width:18px;text-align:right">${i+1}</span><span style="overflow-wrap:anywhere">${esc(s)}</span></div>`).join('') : '<div class="hint">ไม่มีขั้นตอน</div>'; $('ovThink').classList.add('on'); }
 async function send(){
   const text=$('inp').value.trim(); if(!text) return;
   if($('chat').querySelector('.hint')) $('chat').innerHTML='';
@@ -309,7 +321,7 @@ async function send(){
         const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+1); if(!line)continue;
         const ev=JSON.parse(line);
         if(ev.type==='step'){ steps.push(ev.text); thinking.textContent=steps[steps.length-1]||'กำลังคิด...'; $('chat').scrollTop=1e9; }
-        else if(ev.type==='notify'){ add('bot', fmt(ev.text)); $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } // ข้อความสด (แผน/ความคืบหน้า)
+        else if(ev.type==='notify'){ steps.push('แจ้ง: '+ev.text); add('bot', fmt(ev.text)); $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } // ข้อความสด (แผน/ความคืบหน้า)
         else if(ev.type==='error'){ throw new Error(ev.error); }
         else if(ev.type==='done'){ result=ev; }
       }
@@ -317,8 +329,11 @@ async function send(){
     thinking.remove();
     if(result){
       if(result.used!=null&&me){ me.used=result.used; me.quota=result.quota; renderUser(); } // อัปเดต quota
-      if(result.actions&&result.actions.length) add('acts', result.actions.join('\n'));
-      add('bot', fmt(result.reply)); history.push({role:'assistant',content:result.reply}); saveSession();
+      history.push({role:'assistant',content:result.reply});
+      const ti=history.length-1; if(steps.length) thoughts[ti]=steps.slice(); // เก็บประวัติการคิดของคำตอบนี้
+      const botEl=add('bot', fmt(result.reply));
+      if(thoughts[ti]) botEl.appendChild(thoughtChip(ti));
+      saveSession();
       if(voiceMode) speak(result.reply); // โหมดเสียง → อ่านคำตอบออกเสียง
     }
   }catch(e){ thinking.textContent='❌ '+e.message; }
@@ -391,6 +406,7 @@ const ICO={
   userplus:'<circle cx="9" cy="7" r="3"/><path d="M2 21v-1a5 5 0 0 1 10 0v1"/><path d="M18 8v6M15 11h6"/>',
   eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
   key:'<circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 20 3m-3.5 3.5 2 2m-4.5 0 2 2"/>',
+  brain:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
 };
 function ic(name,size){ size=size||16; return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0">${ICO[name]||''}</svg>`; }
 const crownBadge = s => `<span style="color:#ffce5a" title="admin">${ic('crown',s||14)}</span>`;

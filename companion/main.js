@@ -1,7 +1,8 @@
 // Electron main — เปิดหน้าต่าง + dialog เลือกโฟลเดอร์ + อัปเดตอัตโนมัติ + Google login (loopback)
 // build: Google desktop secret ฝังตอน CI · rebuild
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const http = require('node:http'), crypto = require('node:crypto');
+Menu.setApplicationMenu(null); // ซ่อนแถบเมนู File/Edit/View/Window/Help
 
 // Desktop OAuth client (installed app) — secret ของ desktop client ไม่ถือเป็นความลับตามสเปค Google
 const GA = { clientId: '435463760499-kkf0uj2t7i5jb14md609abd15i41jte5.apps.googleusercontent.com', clientSecret: 'INJECT_AT_BUILD' };
@@ -42,11 +43,14 @@ ipcMain.handle('google-login', () => new Promise((resolve, reject) => {
 }));
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1040, height: 740, backgroundColor: '#0f1117',
+    width: 1040, height: 740, backgroundColor: '#0f1117', autoHideMenuBar: true,
     webPreferences: { nodeIntegration: true, contextIsolation: false }, // local trusted app
   });
   win.loadFile('index.html');
 }
+// ตรวจอัปเดตแบบกดเอง (คืน true=เริ่มตรวจ) — ถ้ามีจะเด้ง dialog ให้รีสตาร์ทเหมือนตอนเปิดแอป
+ipcMain.handle('check-update', () => { try { require('electron-updater').autoUpdater.checkForUpdates(); return true; } catch { return false; } });
+ipcMain.handle('app-version', () => app.getVersion());
 // เช็คอัปเดตจาก https://ai.charoenlap.com/downloads/ (โหลด+ติดตั้งเอง แจ้งเตือนเมื่อพร้อม)
 function checkUpdates() {
   try {

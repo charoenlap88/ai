@@ -349,7 +349,7 @@ const server = http.createServer(async (req, res) => {
       let owner = me.id, shared = [];
       const ex = db.getSession(id);
       if (ex) { if (!canEditS(ex)) return J(res, 403, { error: 'ไม่มีสิทธิ์แก้ session นี้' }); owner = ex.owner; shared = ex.shared || []; }
-      db.putSession({ id, owner, shared, title: (b.title || 'แชทใหม่').slice(0, 60), messages: b.messages || [], root: b.root || DEFAULT_ROOT, updated: new Date().toISOString() });
+      db.putSession({ id, owner, shared, title: (b.title || 'แชทใหม่').slice(0, 60), messages: b.messages || [], thoughts: b.thoughts || {}, root: b.root || DEFAULT_ROOT, updated: new Date().toISOString() });
       return J(res, 200, { id });
     }
     if ((m = p.match(/^\/api\/sessions\/([\w-]+)\/share$/)) && req.method === 'POST') {
