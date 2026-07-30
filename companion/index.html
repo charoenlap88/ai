@@ -38,6 +38,8 @@
   #login input,#login select{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:10px 12px;font:inherit;margin-bottom:8px}
   #login input:focus{outline:none;border-color:var(--pri)}
   .hint{color:#8a90a6;font-size:13px;text-align:center;margin:auto}
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:250}
+  .ov .box2{background:#171a24;border:1px solid #2a2f42;border-radius:14px;width:360px;max-width:92vw;padding:22px}
   .toast{position:fixed;top:14px;left:50%;transform:translate(-50%,-20px);background:#1a1e2b;border:1px solid var(--pri);color:#e6e8ef;padding:12px 18px;border-radius:12px;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:300;opacity:0;transition:.3s;max-width:90vw}
   .toast.show{opacity:1;transform:translate(-50%,0)}
   .toast b{color:#8ab4ff;font-size:11.5px}
@@ -71,9 +73,17 @@
   🖥️ <span>Agent Companion</span>
   <span class="q" id="whoq"></span>
   <div class="sp"></div>
+  <button class="btn" onclick="openProfile()">โปรไฟล์</button>
   <button class="btn" onclick="checkUpdate()" title="ตรวจอัปเดต">⟳ อัปเดต</button>
   <button class="btn" onclick="logout()">ออก</button>
 </header>
+<div class="ov" id="profOv" onclick="if(event.target===this)this.style.display='none'">
+  <div class="box2">
+    <h3 style="margin:0 0 14px;font-size:16px">โปรไฟล์</h3>
+    <div id="profBody"></div>
+    <button class="btn pri" style="width:100%;margin-top:16px" onclick="$('profOv').style.display='none'">ปิด</button>
+  </div>
+</div>
 <div class="bar">
   <span>📁</span><span class="path" id="rootpath">— ยังไม่เลือกโฟลเดอร์ —</span>
   <button class="btn" onclick="pickFolder()">เลือกโฟลเดอร์</button>
@@ -92,7 +102,8 @@ const fs = require('fs'), path = require('path'), { execSync, spawn } = require(
 const JOBS = {}; // background jobs ในเครื่อง
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-let serverUrl = '', token = '', root = '', messages = [], currentId = null;
+let serverUrl = '', token = '', root = '', messages = [], currentId = null, me = null;
+const fmtN = n => (+n || 0).toLocaleString();
 const api = (p, opt = {}) => fetch(serverUrl + p, { ...opt, headers: { ...(opt.headers || {}), authorization: 'Bearer ' + token } });
 
 // ---- login ----
@@ -112,7 +123,7 @@ async function doGoogle(){
     const idToken = await ipcRenderer.invoke('google-login');
     const d = await fetch(serverUrl + '/api/auth/google', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ credential: idToken }) }).then(r=>r.json());
     if(d.error){ $('lg_msg').style.color='#ff8a8a'; $('lg_msg').textContent = d.error; return; }
-    token = d.token; $('login').style.display='none'; setQ(d.user.used, d.user.quota); newChat(); connectWS();
+    token = d.token; me = d.user; $('login').style.display='none'; setQ(d.user.used, d.user.quota); newChat(); connectWS();
   }catch(e){ $('lg_msg').style.color='#ff8a8a'; $('lg_msg').textContent = 'Google login: ' + e.message; }
 }
 function logout(){ token=''; messages=[]; currentId=null; root=''; if(ws){ws.onclose=null;try{ws.close()}catch{};ws=null;} $('sessList').innerHTML=''; $('rootpath').textContent='— ยังไม่เลือกโฟลเดอร์ —';
@@ -129,7 +140,21 @@ function connectWS(){
   }catch{}
 }
 function toast(text){ const t=document.createElement('div'); t.className='toast'; t.innerHTML='<b>ข้อความจากแอดมิน</b><br>'+esc(text); document.body.appendChild(t); requestAnimationFrame(()=>t.classList.add('show')); setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); }, 9000); }
-function setQ(used, quota){ $('whoq').textContent = 'token: ' + (used||0) + (quota>0?(' / '+quota):' (ไม่จำกัด)'); }
+function setQ(used, quota){ if(me){me.used=used;me.quota=quota;} $('whoq').textContent = 'token: ' + fmtN(used) + (quota>0?(' / '+fmtN(quota)):' (ไม่จำกัด)'); }
+function openProfile(){
+  if(!me) return;
+  const has=me.quota>0, pct=has?Math.min(100,Math.round((me.used/me.quota)*100)):0, left=has?Math.max(0,me.quota-(me.used||0)):null;
+  const initial=((me.email||'?').trim()[0]||'?').toUpperCase();
+  $('profBody').innerHTML=`
+    <div style="width:64px;height:64px;border-radius:50%;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:600;margin:0 auto">${esc(initial)}</div>
+    <div style="text-align:center;margin:12px 0 16px"><div style="font-size:15px;font-weight:600;word-break:break-all">${esc(me.email)}</div><div style="font-size:12px;color:#8a90a6;margin-top:3px">${me.role==='admin'?'admin':'ผู้ใช้'}</div></div>
+    <div style="background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:15px">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#8a90a6"><span>Token ที่ใช้ไป</span><span>${has?pct+'%':'ไม่จำกัด'}</span></div>
+      <div style="font-size:22px;font-weight:700;margin:4px 0 ${has?'10px':'0'}">${fmtN(me.used)}${has?` <span style="font-size:13px;color:#8a90a6;font-weight:400">/ ${fmtN(me.quota)}</span>`:''}</div>
+      ${has?`<div style="height:9px;background:#0f1117;border:1px solid #2a2f42;border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--pri)"></div></div><div style="font-size:12px;color:#8a90a6;margin-top:9px">เหลืออีก <b style="color:#e6e8ef">${fmtN(left)}</b> token</div>`:''}
+    </div>`;
+  $('profOv').style.display='flex';
+}
 async function pickFolder(){ const p = await ipcRenderer.invoke('pick-folder'); if(p){ root=p; $('rootpath').textContent=p; } }
 
 // ---- sessions (เก็บ/โหลดจาก server เหมือนเว็บ) ----
