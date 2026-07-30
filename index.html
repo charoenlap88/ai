@@ -249,7 +249,7 @@
 </div>
 
 <div class="overlay" id="ovAdmin" onclick="if(event.target===this)$('ovAdmin').classList.remove('on')">
-  <div class="modal" style="width:640px">
+  <div class="modal" style="width:min(920px,95vw);height:88vh;max-height:88vh">
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffce5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16M4 8l4 4 4-7 4 7 4-4-1.5 10h-13z"/></svg> Admin — จัดการผู้ใช้ &amp; quota</h3>
     <div class="mbody"><div id="userList"></div></div>
     <div class="mfoot"><button class="btn" onclick="$('ovAdmin').classList.remove('on')">ปิด</button></div>
