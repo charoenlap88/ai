@@ -11,13 +11,17 @@ ipcMain.handle('google-login', () => new Promise((resolve, reject) => {
   if (GA.clientId.startsWith('PUT_')) return reject(new Error('ยังไม่ได้ตั้ง Desktop OAuth client'));
   const verifier = crypto.randomBytes(32).toString('base64url');
   const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-  let redirect;
+  let redirect, done = false;
   const server = http.createServer(async (req, res) => {
-    const code = new URL(req.url, redirect).searchParams.get('code');
+    const q = new URL(req.url, 'http://127.0.0.1').searchParams;
+    const code = q.get('code'), err = q.get('error');
+    if (!code && !err) { res.statusCode = 204; res.end(); return; } // เช่น favicon — เพิกเฉย รอ callback จริง
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end('<body style="font-family:sans-serif;background:#0f1117;color:#e6e8ef;text-align:center;padding-top:64px"><h2>ล็อกอินสำเร็จ ✓</h2><p>กลับไปที่แอป AI Agent ได้เลย · ปิดหน้านี้ได้</p></body>');
+    res.end('<body style="font-family:sans-serif;background:#0f1117;color:#e6e8ef;text-align:center;padding-top:64px"><h2>' + (code ? 'ล็อกอินสำเร็จ ✓' : 'ล็อกอินไม่สำเร็จ') + '</h2><p>กลับไปที่แอป AI Agent ได้เลย · ปิดหน้านี้ได้</p></body>');
+    if (done) return; done = true;
     server.close();
-    if (!code) return reject(new Error('ยกเลิกการล็อกอิน'));
+    if (err) return reject(new Error('Google: ' + err));
+    if (!code) return reject(new Error('ไม่ได้รับ code'));
     try {
       const tok = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -34,7 +38,7 @@ ipcMain.handle('google-login', () => new Promise((resolve, reject) => {
       scope: 'openid email profile', code_challenge: challenge, code_challenge_method: 'S256', prompt: 'select_account',
     }).toString());
   });
-  setTimeout(() => { try { server.close(); } catch {} reject(new Error('หมดเวลา 3 นาที')); }, 180000);
+  setTimeout(() => { if (done) return; done = true; try { server.close(); } catch {} reject(new Error('หมดเวลา 3 นาที')); }, 180000);
 }));
 function createWindow() {
   const win = new BrowserWindow({
