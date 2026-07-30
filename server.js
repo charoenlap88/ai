@@ -64,6 +64,7 @@ const TOOLS = [
   { type: 'function', function: { name: 'read_file', description: 'อ่านไฟล์ข้อความ', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } },
   { type: 'function', function: { name: 'write_file', description: 'สร้าง/เขียนทับไฟล์ (backup อัตโนมัติ)', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } } },
   { type: 'function', function: { name: 'web_search', description: 'ค้นหาข้อมูลบนอินเทอร์เน็ต (คืนหัวข้อ+ลิงก์)', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'generate_image', description: 'สร้างรูปภาพจากคำบรรยาย (ฟรี ไม่มีค่าใช้จ่าย) — คืน URL รูป ให้แสดงต่อ user ด้วย markdown ![](url)', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'คำบรรยายรูป (ภาษาอังกฤษได้ผลดีสุด)' }, width: { type: 'number' }, height: { type: 'number' } }, required: ['prompt'] } } },
   { type: 'function', function: { name: 'fetch_url', description: 'อ่านเนื้อหาหน้าเว็บจาก URL (คืนข้อความ)', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
   { type: 'function', function: { name: 'run_command', description: 'รันคำสั่ง shell ในโฟลเดอร์โปรเจกต์ (เช่น ls, npm test, git status)', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } },
   { type: 'function', function: { name: 'notify', description: 'ส่งข้อความ/ความคืบหน้าให้ user ทันที — ใช้บอกแผน+เวลาที่ประเมินก่อนเริ่มงาน และอัปเดตระหว่างงานยาว', parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] } } },
@@ -90,6 +91,10 @@ function blockedHost(url) {
 
 async function runTool(name, args, allowWrite, allowShell, log, root, onNotify) {
   if (name === 'notify') { onNotify && onNotify(args.message || ''); return 'แจ้ง user แล้ว'; }
+  if (name === 'generate_image') {
+    const url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(args.prompt || '') + '?width=' + (Number(args.width) || 1024) + '&height=' + (Number(args.height) || 1024) + '&nologo=true&model=flux';
+    return 'สร้างรูปสำเร็จ — ตอบ user โดยแทรกรูปด้วย markdown: ![image](' + url + ')';
+  }
   if (name === 'bg_list') { return [...JOBS.values()].map(j => j.id + ' [' + j.status + '] ' + j.cmd.slice(0, 50)).join('\n') || 'ไม่มี background job'; }
   if (name === 'bg_start') {
     if (!allowShell) return 'ปฏิเสธ: ต้องเปิด "อนุญาตรันคำสั่ง"';
@@ -181,6 +186,8 @@ async function runTool(name, args, allowWrite, allowShell, log, root, onNotify) 
 // อ่านไฟล์กฎการเขียนโค้ด ฝังเข้า system prompt ทุกครั้ง (แก้ไฟล์นี้เพื่อปรับพฤติกรรม agent ได้)
 const AGENT_RULES = (() => { try { return fs.readFileSync(path.join(DIR, 'AGENT_RULES.md'), 'utf8'); } catch { return ''; } })();
 const sysPrompt = (root) => `คุณคือ "AI Agent" ผู้ช่วยที่ขับเคลื่อนด้วยโมเดล DeepSeek — ห้ามอ้างว่าเป็น Claude/ChatGPT/Gemini หรือโมเดลของบริษัทอื่นเด็ดขาด ถ้าถูกถามว่าเป็นใคร/รันด้วยอะไร ให้ตอบว่า "เป็น AI Agent ทำงานด้วยโมเดล DeepSeek"
+⚠️ ตอบเป็น "ภาษาไทย" เท่านั้น 100% ห้ามใช้ภาษาจีนหรือภาษาอื่นเด็ดขาด (ยกเว้นโค้ด ชื่อเฉพาะ หรือข้อความที่ผู้ใช้พิมพ์มาเป็นภาษาอื่น) แม้แต่คำเดียวก็ห้าม
+- ต้องการสร้างรูป ให้ใช้ tool generate_image (ฟรี) แล้วแทรกรูปในคำตอบด้วย markdown ![](url)
 คุณเป็นผู้ช่วยเขียนโค้ด + ค้นคว้าข้อมูล เข้าถึงไฟล์ในโปรเจกต์ได้ (root = ${root})
 - ไฟล์: ใช้ list_dir/read_file สำรวจก่อน, อ่านก่อนแก้, แก้ให้น้อยที่สุด, path สัมพัทธ์กับ root
 - อินเทอร์เน็ต: ใช้ web_search หาข้อมูล แล้ว fetch_url อ่านหน้าที่เกี่ยวข้องเพื่อดึงรายละเอียด

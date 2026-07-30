@@ -266,7 +266,9 @@ window.fetch = (url, opts = {}) => { // แนบ token ให้ทุก /api
 };
 const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 // render markdown แบบเบาๆ: code block + inline code/path พร้อมปุ่มคัดลอก
-function inlineFmt(s){ return esc(s).replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>'); }
+function inlineFmt(s){ return esc(s)
+  .replace(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g, '<img src="$1" loading="lazy" style="max-width:100%;border-radius:8px;margin:6px 0;display:block">')
+  .replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>'); }
 function codeBlock(code, lang){ return `<div class="codewrap"><div class="codehdr"><span>${esc(lang || 'code')}</span><button class="copy" data-c="${encodeURIComponent(code)}" onclick="copyCode(this)">📋 คัดลอก</button></div><pre class="code">${esc(code)}</pre></div>`; }
 function fmt(text){
   const fence = /```(\w*)\n?([\s\S]*?)```/g; let html = '', last = 0, m;
