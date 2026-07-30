@@ -50,6 +50,9 @@
   .msg a{word-break:break-all}
   .thchip{display:flex;align-items:center;gap:6px;width:fit-content;margin-top:9px;background:#0f1117;border:1px solid #2a2f42;color:#8a90a6;font-size:11.5px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:inherit}
   .thchip:hover{border-color:var(--pri);color:#cdd3e6}
+  .toast{position:fixed;top:16px;left:50%;transform:translate(-50%,-20px);background:#1a1e2b;border:1px solid var(--pri);color:#e6e8ef;padding:12px 18px;border-radius:12px;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:200;opacity:0;transition:.3s;max-width:90vw}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast b{color:#8ab4ff;font-size:11.5px}
   .user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
   .bot{align-self:flex-start;background:#1c2030;border:1px solid #2a2f42;border-bottom-left-radius:4px}
   .acts{align-self:flex-start;font-size:11.5px;color:#7fd0a0;background:#0e1710;border:1px solid #1e3020;border-radius:8px;padding:6px 10px;white-space:pre-wrap;font-family:ui-monospace,monospace}
@@ -407,13 +410,25 @@ const ICO={
   eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
   key:'<circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 20 3m-3.5 3.5 2 2m-4.5 0 2 2"/>',
   brain:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/>',
 };
 function ic(name,size){ size=size||16; return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0">${ICO[name]||''}</svg>`; }
 const crownBadge = s => `<span style="color:#ffce5a" title="admin">${ic('crown',s||14)}</span>`;
 function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions();
   const admin = me.role==='admin';
   for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
+  connectWS();
 }
+let ws=null;
+function connectWS(){
+  if(!authToken) return;
+  try{
+    ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws?token='+encodeURIComponent(authToken));
+    ws.onmessage = e => { try{ const m=JSON.parse(e.data); if(m.type==='admin_message') toast(m.text); else if(m.type==='reload') location.reload(); }catch{} };
+    ws.onclose = () => { ws=null; setTimeout(()=>{ if(authToken) connectWS(); }, 5000); }; // reconnect
+  }catch{}
+}
+function toast(text){ const t=document.createElement('div'); t.className='toast'; t.innerHTML='<b>ข้อความจากแอดมิน</b><br>'+esc(text); document.body.appendChild(t); requestAnimationFrame(()=>t.classList.add('show')); setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); }, 9000); }
 function toggleUserMenu(force){ const m=$('userMenu'); if(force===false) m.classList.remove('on'); else m.classList.toggle('on'); }
 function toggleSide(force){ const s=document.querySelector('.side'), b=$('backdrop');
   const open = force===undefined ? !s.classList.contains('open') : force;
@@ -458,13 +473,22 @@ function openProfile(){
   $('ovProfile').classList.add('on');
 }
 async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetch('/api/users').then(r=>r.json());
+  const on=await fetch('/api/online').then(r=>r.json()).catch(()=>({users:0,connections:0}));
   const totUsed=a.reduce((s,x)=>s+(x.used||0),0), unlimited=a.filter(x=>!(x.quota>0)).length;
   const totQuota=a.reduce((s,x)=>s+(x.quota>0?x.quota:0),0);
   const card=(l,v,sub)=>`<div style="background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px"><div class="lbl">${l}</div><div style="font-size:20px;font-weight:700;margin-top:2px">${v}</div>${sub?`<div class="lbl" style="margin-top:2px">${sub}</div>`:''}</div>`;
-  $('userList').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:14px">
+  $('userList').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:12px">
       ${card('ผู้ใช้ทั้งหมด',a.length)}
+      ${card('🟢 ออนไลน์ตอนนี้',on.users,on.connections+' การเชื่อมต่อ')}
       ${card('Token ใช้ไปรวม',fmtN(totUsed))}
       ${card('Quota รวม (จำกัด)',fmtN(totQuota),'+ '+unlimited+' คนไม่จำกัด')}
+    </div>
+    <div style="background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px;margin-bottom:14px">
+      <div class="lbl" style="margin-bottom:7px">ส่งข้อความหาผู้ใช้ (realtime)</div>
+      <div style="display:flex;gap:8px">
+        <input id="bcastMsg" placeholder="พิมพ์ข้อความ..." onkeydown="if(event.key==='Enter')sendMsg()" style="flex:1;background:#12141d;border:1px solid #2a2f42;color:#fff;border-radius:8px;padding:8px 10px">
+        <button class="btn pri" onclick="sendMsg()" style="white-space:nowrap">ส่งทั้งหมด</button>
+      </div>
     </div>`+
    `<div style="overflow-x:auto"><table class="utable"><tr><th>อีเมล</th><th>สถานะ</th><th>ใช้</th><th>quota</th><th></th></tr>`+
    a.map(x=>`<tr><td style="white-space:nowrap">${esc(x.email)} ${x.role==='admin'?crownBadge(13):''}</td>
@@ -476,9 +500,18 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
        ${x.status==='approved'&&x.role!=='admin'?`<button class="btn" style="color:#ff8a8a" title="ระงับ" onclick="setUser('${x.id}',{status:'disabled'})">${ic('ban',15)}</button>`:''}
        ${x.status==='disabled'?`<button class="btn" title="คืนสิทธิ์" onclick="setUser('${x.id}',{status:'approved'})">${ic('check',15)}</button>`:''}
        <button class="btn" title="รีเซ็ตรหัสผ่าน" onclick="resetPw('${x.id}','${esc(x.email)}')">${ic('key',15)}</button>
+       <button class="btn" title="ส่งข้อความ" onclick="sendMsg('${esc(x.email)}')">${ic('mail',15)}</button>
      </td></tr>`).join('')+`</table></div><div class="lbl" style="margin-top:10px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกดบันทึก</div>`;
 }
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
+async function sendMsg(email){
+  const text = email ? prompt('ส่งข้อความหา '+email+':') : ($('bcastMsg')?$('bcastMsg').value.trim():'');
+  if(!text) return;
+  const d = await fetch('/api/broadcast',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,email})}).then(r=>r.json());
+  if(d.error){ alert(d.error); return; }
+  alert('ส่งแล้ว → '+(email||'ทุกคน')+' ('+d.sent+' การเชื่อมต่อออนไลน์)');
+  if(!email && $('bcastMsg')) $('bcastMsg').value='';
+}
 async function resetPw(id,email){
   const pw=prompt('ตั้งรหัสผ่านใหม่ให้ '+email+' (อย่างน้อย 4 ตัว):'); if(!pw) return;
   const d=await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw})}).then(r=>r.json());

@@ -327,6 +327,19 @@ const server = http.createServer(async (req, res) => {
       if (b.password) { if (String(b.password).length < 4) return J(res, 400, { error: 'รหัสผ่านสั้นเกินไป (อย่างน้อย 4 ตัว)' }); t.pass_hash = hashPw(String(b.password)); } // admin รีเซ็ตรหัส
       saveUsers(users); return J(res, 200, pub(t));
     }
+    // ---- realtime: จำนวน online + ส่งข้อความ (admin) ----
+    if (p === '/api/online' && req.method === 'GET') {
+      if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
+      const list = [...wsClients.entries()].map(([uid, set]) => { const u = loadUsers().find(x => x.id === uid); return { email: u ? u.email : uid, conns: set.size }; });
+      return J(res, 200, { users: wsClients.size, connections: list.reduce((a, b) => a + b.conns, 0), list });
+    }
+    if (p === '/api/broadcast' && req.method === 'POST') {
+      if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
+      const b = JSON.parse(await readBody(req) || '{}'); if (!b.text) return J(res, 400, { error: 'ไม่มีข้อความ' });
+      let uid = null; if (b.email) { const t = loadUsers().find(x => x.email === b.email); if (!t) return J(res, 404, { error: 'ไม่พบผู้ใช้' }); uid = t.id; }
+      const n = wsBroadcast({ type: 'admin_message', text: b.text, at: new Date().toISOString() }, uid);
+      return J(res, 200, { ok: true, sent: n });
+    }
     // ---- โฟลเดอร์ ----
     if (p === '/api/root' && req.method === 'GET') return J(res, 200, { root: DEFAULT_ROOT, hasKey: !!KEY }); // ค่าเริ่มต้น (แต่ละ session เลือกเอง)
     if (p === '/api/browse') {
@@ -428,5 +441,48 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404); res.end('not found');
   } catch (e) { J(res, 400, { error: String(e.message || e) }); }
 });
+// ---- WebSocket (zero-dep): แจ้งเตือน realtime + admin ส่งข้อความหา client ----
+const wsClients = new Map(); // userId -> Set<socket>
+function wsFrame(str) {
+  const payload = Buffer.from(str); const len = payload.length; let head;
+  if (len < 126) head = Buffer.from([0x81, len]);
+  else if (len < 65536) { head = Buffer.alloc(4); head[0] = 0x81; head[1] = 126; head.writeUInt16BE(len, 2); }
+  else { head = Buffer.alloc(10); head[0] = 0x81; head[1] = 127; head.writeBigUInt64BE(BigInt(len), 2); }
+  return Buffer.concat([head, payload]);
+}
+function wsSend(socket, obj) { try { socket.write(wsFrame(JSON.stringify(obj))); } catch {} }
+function wsBroadcast(obj, userId) {
+  let n = 0; const sets = userId ? [wsClients.get(userId)].filter(Boolean) : [...wsClients.values()];
+  for (const set of sets) for (const s of set) { wsSend(s, obj); n++; }
+  return n;
+}
+function wsHandle(socket, buf) { // parse frames จาก client — สนใจแค่ ping/close
+  let off = 0;
+  while (off + 2 <= buf.length) {
+    const op = buf[off] & 0x0f, masked = buf[off + 1] & 0x80; let len = buf[off + 1] & 0x7f, p = off + 2;
+    if (len === 126) { len = buf.readUInt16BE(p); p += 2; } else if (len === 127) { len = Number(buf.readBigUInt64BE(p)); p += 8; }
+    let mask; if (masked) { mask = buf.slice(p, p + 4); p += 4; }
+    if (p + len > buf.length) break;
+    let data = buf.slice(p, p + len); if (masked) { const o = Buffer.alloc(len); for (let i = 0; i < len; i++) o[i] = data[i] ^ mask[i % 4]; data = o; }
+    off = p + len;
+    if (op === 0x8) { try { socket.end(); } catch {} return; }             // close
+    if (op === 0x9) { try { socket.write(Buffer.concat([Buffer.from([0x8a, data.length]), data])); } catch {} } // ping -> pong
+  }
+}
+server.on('upgrade', (req, socket) => {
+  const u = new URL(req.url, 'http://x');
+  if (u.pathname !== '/ws') { socket.destroy(); return; }
+  const user = userByToken(u.searchParams.get('token'));
+  if (!user || user.status !== 'approved') { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
+  const accept = crypto.createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+  socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
+  if (!wsClients.has(user.id)) wsClients.set(user.id, new Set());
+  wsClients.get(user.id).add(socket);
+  wsSend(socket, { type: 'hello' });
+  const cleanup = () => { const s = wsClients.get(user.id); if (s) { s.delete(socket); if (!s.size) wsClients.delete(user.id); } };
+  socket.on('data', b => wsHandle(socket, b));
+  socket.on('close', cleanup); socket.on('error', cleanup); socket.on('end', cleanup);
+});
+
 // bind 127.0.0.1 เท่านั้น = เข้าจากเครื่องนี้เท่านั้น (ปลอดภัย)
 server.listen(PORT, '127.0.0.1', () => console.log(`DeepSeek agent → http://localhost:${PORT}\n  DEFAULT ROOT = ${DEFAULT_ROOT}\n  key  = ${KEY ? 'ตั้งแล้ว' : '❌ ยังไม่ตั้ง'}`));
