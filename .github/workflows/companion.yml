@@ -25,7 +25,9 @@ jobs:
           node-version: '20'
       - name: install + build
         working-directory: companion
+        shell: bash
         run: |
+          npm version 1.1.${{ github.run_number }} --no-git-tag-version --allow-same-version  # auto patch version (mac+win ตรงกันด้วย run_number เดียว)
           npm install
           npx electron-builder ${{ matrix.args }} --publish never
       - uses: actions/upload-artifact@v4
