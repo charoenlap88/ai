@@ -293,15 +293,16 @@ const server = http.createServer(async (req, res) => {
       return J(res, 200, { token: issueToken(uu.id), user: pub(uu) });
     }
     if (p === '/api/auth/google' && req.method === 'POST') {
-      const CID = process.env.GOOGLE_CLIENT_ID;
-      if (!CID) return J(res, 400, { error: 'ยังไม่ได้ตั้ง GOOGLE_CLIENT_ID บน server' });
+      // รับ aud ได้ทั้ง Web client (เว็บ) และ Desktop client (แอปติดตั้ง)
+      const auds = [process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_ID_DESKTOP].filter(Boolean);
+      if (!auds.length) return J(res, 400, { error: 'ยังไม่ได้ตั้ง GOOGLE_CLIENT_ID บน server' });
       const b = JSON.parse(await readBody(req) || '{}');
       if (!b.credential) return J(res, 400, { error: 'ไม่มี credential' });
       // ยืนยัน ID token กับ Google (ไม่ต้องมี lib) แล้วตรวจว่า aud = client id เรา + email ยืนยันแล้ว
       const info = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(b.credential)).then(r => r.json()).catch(() => null);
       const okIss = info && (info.iss === 'accounts.google.com' || info.iss === 'https://accounts.google.com');
       const okEmail = info && (info.email_verified === true || info.email_verified === 'true');
-      if (!info || info.aud !== CID || !okIss || !okEmail) return J(res, 401, { error: 'ยืนยัน Google ไม่สำเร็จ' });
+      if (!info || !auds.includes(info.aud) || !okIss || !okEmail) return J(res, 401, { error: 'ยืนยัน Google ไม่สำเร็จ' });
       const users = loadUsers(); let u = users.find(x => x.email === info.email);
       const adm = isAdminEmail(info.email);
       if (!u) { u = { id: 'u' + Date.now(), email: info.email, pass_hash: '', role: adm ? 'admin' : 'user', status: 'approved', quota: adm ? 0 : 1000000, used: 0, google: true, created: new Date().toISOString() }; users.push(u); saveUsers(users); }

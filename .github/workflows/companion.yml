@@ -26,7 +26,10 @@ jobs:
       - name: install + build
         working-directory: companion
         shell: bash
+        env:
+          GS: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
+          node -e "const f='main.js';let s=require('fs').readFileSync(f,'utf8');s=s.replace('INJECT_AT_BUILD',process.env.GS||'');require('fs').writeFileSync(f,s)"  # ฝัง secret ตอน build (ไม่อยู่ใน repo)
           npm version 1.1.${{ github.run_number }} --no-git-tag-version --allow-same-version  # auto patch version (mac+win ตรงกันด้วย run_number เดียว)
           npm install
           npx electron-builder ${{ matrix.args }} --publish never

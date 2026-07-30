@@ -45,6 +45,8 @@
     <input id="lg_email" placeholder="email">
     <input id="lg_pass" type="password" placeholder="password">
     <button class="btn pri" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div style="display:flex;align-items:center;gap:8px;color:#5a6078;font-size:11.5px;margin:12px 0"><span style="flex:1;height:1px;background:#2a2f42"></span>หรือ<span style="flex:1;height:1px;background:#2a2f42"></span></div>
+    <button class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:9px" onclick="doGoogle()"><svg width="17" height="17" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.600l7.1 5.5c4.1-3.8 6.6-9.4 6.6-16.1z"/><path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.7-3.9-12.4-9.2l-7.3 5.6C7.9 40.9 15.3 46 24 46z"/><path fill="#FBBC05" d="M11.6 27.9c-.4-1.3-.7-2.6-.7-4s.2-2.7.7-4l-7.3-5.6C2.9 17.3 2 20.5 2 24s.9 6.7 2.3 9.6l7.3-5.7z"/><path fill="#EA4335" d="M24 10.8c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C35 4.1 30 2 24 2 15.3 2 7.9 7.1 4.3 14.4l7.3 5.6C13.3 14.7 18.2 10.8 24 10.8z"/></svg> เข้าสู่ระบบด้วย Google</button>
     <div id="lg_msg" style="font-size:12px;color:#ff8a8a;margin-top:8px"></div>
   </div>
 </div>
@@ -83,6 +85,16 @@ async function doLogin(){
     token = d.token; $('login').style.display='none';
     setQ(d.user.used, d.user.quota);
   }catch(e){ $('lg_msg').textContent = 'ต่อ server ไม่ได้: ' + e.message; }
+}
+async function doGoogle(){
+  serverUrl = $('lg_url').value.replace(/\/$/, '');
+  $('lg_msg').style.color='#8a90a6'; $('lg_msg').textContent='กำลังเปิด Google ใน browser...';
+  try{
+    const idToken = await ipcRenderer.invoke('google-login');
+    const d = await fetch(serverUrl + '/api/auth/google', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ credential: idToken }) }).then(r=>r.json());
+    if(d.error){ $('lg_msg').style.color='#ff8a8a'; $('lg_msg').textContent = d.error; return; }
+    token = d.token; $('login').style.display='none'; setQ(d.user.used, d.user.quota);
+  }catch(e){ $('lg_msg').style.color='#ff8a8a'; $('lg_msg').textContent = 'Google login: ' + e.message; }
 }
 function logout(){ token=''; messages=[]; $('login').style.display='flex'; }
 function setQ(used, quota){ $('whoq').textContent = 'token: ' + (used||0) + (quota>0?(' / '+quota):' (ไม่จำกัด)'); }
