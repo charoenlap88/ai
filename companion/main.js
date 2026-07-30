@@ -1,5 +1,5 @@
 // Electron main — เปิดหน้าต่าง + dialog เลือกโฟลเดอร์ + อัปเดตอัตโนมัติ + Google login (loopback)
-// build: Google desktop secret ฝังตอน CI
+// build: Google desktop secret ฝังตอน CI · rebuild
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const http = require('node:http'), crypto = require('node:crypto');
 
