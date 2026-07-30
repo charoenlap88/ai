@@ -1,8 +1,21 @@
 // Electron main — เปิดหน้าต่าง + dialog เลือกโฟลเดอร์ + อัปเดตอัตโนมัติ + Google login (loopback)
 // build: Google desktop secret ฝังตอน CI · rebuild
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } = require('electron');
 const http = require('node:http'), crypto = require('node:crypto');
 Menu.setApplicationMenu(null); // ซ่อนแถบเมนู File/Edit/View/Window/Help
+let win, tray, quitting = false;
+const TRAY_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAaklEQVR4nO3VTQoAIQiA0S7YSbr/ulZBBFH+paIfuEweTDNTautdc0oCEkA5PIsJ2IsFOPUFcEsU8JoIABorABsZwBUYIJUfgPojMHMJzbyGUARkp69P8Q2B2eXzd2wCsCIoO3wDOCYBCRhij9xuNH6MygAAAABJRU5ErkJggg==';
+function createTray() {
+  tray = new Tray(nativeImage.createFromDataURL(TRAY_ICON));
+  tray.setToolTip('AI Agent');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'เปิดโปรแกรม', click: () => { win.show(); win.focus(); } },
+    { type: 'separator' },
+    { label: 'ปิดโปรแกรม', click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on('click', () => { win.isVisible() ? win.hide() : (win.show(), win.focus()); });
+}
+app.on('before-quit', () => { quitting = true; });
 
 // Desktop OAuth client (installed app) — secret ของ desktop client ไม่ถือเป็นความลับตามสเปค Google
 const GA = { clientId: '435463760499-kkf0uj2t7i5jb14md609abd15i41jte5.apps.googleusercontent.com', clientSecret: 'INJECT_AT_BUILD' };
@@ -42,11 +55,12 @@ ipcMain.handle('google-login', () => new Promise((resolve, reject) => {
   setTimeout(() => { if (done) return; done = true; try { server.close(); } catch {} reject(new Error('หมดเวลา 3 นาที')); }, 180000);
 }));
 function createWindow() {
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     width: 1040, height: 740, backgroundColor: '#0f1117', autoHideMenuBar: true,
     webPreferences: { nodeIntegration: true, contextIsolation: false }, // local trusted app
   });
   win.loadFile('index.html');
+  win.on('close', e => { if (!quitting) { e.preventDefault(); win.hide(); } }); // ปิดหน้าต่าง = ยุบลง system tray
 }
 // ตรวจอัปเดตแบบกดเอง (คืน true=เริ่มตรวจ) — ถ้ามีจะเด้ง dialog ให้รีสตาร์ทเหมือนตอนเปิดแอป
 ipcMain.handle('check-update', () => { try { require('electron-updater').autoUpdater.checkForUpdates(); return true; } catch { return false; } });
@@ -63,8 +77,9 @@ function checkUpdates() {
     autoUpdater.checkForUpdatesAndNotify();
   } catch (e) { /* dev mode / ไม่มี feed → ข้าม */ }
 }
-app.whenReady().then(() => { createWindow(); checkUpdates(); });
-app.on('window-all-closed', () => app.quit());
+app.whenReady().then(() => { createWindow(); createTray(); checkUpdates(); });
+app.on('window-all-closed', () => {}); // ไม่ quit — อยู่ใน system tray ต่อ
+app.on('activate', () => { if (win) { win.show(); win.focus(); } });
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
