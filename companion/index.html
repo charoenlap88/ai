@@ -6,7 +6,14 @@
 <style>
   :root{--pri:#4d6bff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
   *{box-sizing:border-box}
-  body{margin:0;background:#0f1117;color:#e6e8ef;height:100vh;display:flex;flex-direction:column}
+  body{margin:0;background:#0f1117;color:#e6e8ef;height:100vh;display:flex}
+  .side{width:230px;flex:none;background:#12141d;border-right:1px solid #262a38;display:flex;flex-direction:column;padding:10px;gap:8px}
+  .side .lbl{font-size:11px;color:#7a8098;text-transform:uppercase;letter-spacing:.6px;margin:4px 2px 0}
+  #sessList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+  .sitem{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cdd3e6}
+  .sitem:hover{background:#1a1e2b}
+  .sitem.active{background:#232a3d}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
   header{background:#171a24;border-bottom:1px solid #262a38;padding:9px 14px;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
   header .sp{flex:1}
   header .q{font-size:11.5px;color:#8a90a6;font-weight:400}
@@ -51,6 +58,12 @@
   </div>
 </div>
 
+<aside class="side">
+  <button class="btn pri" style="width:100%" onclick="newChat()">+ แชทใหม่</button>
+  <div class="lbl">ประวัติ</div>
+  <div id="sessList"></div>
+</aside>
+<div class="main">
 <header>
   🖥️ <span>Agent Companion</span>
   <span class="q" id="whoq"></span>
@@ -69,13 +82,15 @@
   <textarea id="inp" placeholder="สั่งงาน... (Enter ส่ง)"></textarea>
   <button class="btn pri" id="sendBtn" onclick="send()" style="padding:0 20px">ส่ง</button>
 </div>
+</div>
 
 <script>
 const fs = require('fs'), path = require('path'), { execSync, spawn } = require('child_process'), { ipcRenderer } = require('electron');
 const JOBS = {}; // background jobs ในเครื่อง
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-let serverUrl = '', token = '', root = '', messages = [];
+let serverUrl = '', token = '', root = '', messages = [], currentId = null;
+const api = (p, opt = {}) => fetch(serverUrl + p, { ...opt, headers: { ...(opt.headers || {}), authorization: 'Bearer ' + token } });
 
 // ---- login ----
 async function doLogin(){
@@ -94,15 +109,39 @@ async function doGoogle(){
     const idToken = await ipcRenderer.invoke('google-login');
     const d = await fetch(serverUrl + '/api/auth/google', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ credential: idToken }) }).then(r=>r.json());
     if(d.error){ $('lg_msg').style.color='#ff8a8a'; $('lg_msg').textContent = d.error; return; }
-    token = d.token; $('login').style.display='none'; setQ(d.user.used, d.user.quota);
+    token = d.token; $('login').style.display='none'; setQ(d.user.used, d.user.quota); newChat();
   }catch(e){ $('lg_msg').style.color='#ff8a8a'; $('lg_msg').textContent = 'Google login: ' + e.message; }
 }
-function logout(){ token=''; messages=[]; root=''; $('rootpath').textContent='— ยังไม่เลือกโฟลเดอร์ —';
+function logout(){ token=''; messages=[]; currentId=null; root=''; $('sessList').innerHTML=''; $('rootpath').textContent='— ยังไม่เลือกโฟลเดอร์ —';
   $('chat').innerHTML='<div class="hint">เลือกโฟลเดอร์ แล้วสั่งงานได้เลย — ไฟล์ทำงานในเครื่องคุณ, AI คิดผ่าน server</div>';
   $('lg_email').value=''; $('lg_pass').value=''; $('lg_msg').textContent=''; $('login').style.display='flex'; }
 async function checkUpdate(){ const ok = await ipcRenderer.invoke('check-update'); alert(ok ? 'กำลังตรวจอัปเดต... ถ้ามีเวอร์ชันใหม่จะแจ้งให้รีสตาร์ท' : 'ตรวจอัปเดตไม่ได้'); }
 function setQ(used, quota){ $('whoq').textContent = 'token: ' + (used||0) + (quota>0?(' / '+quota):' (ไม่จำกัด)'); }
 async function pickFolder(){ const p = await ipcRenderer.invoke('pick-folder'); if(p){ root=p; $('rootpath').textContent=p; } }
+
+// ---- sessions (เก็บ/โหลดจาก server เหมือนเว็บ) ----
+async function loadSessions(){
+  try{
+    const list = await api('/api/sessions').then(r=>r.json());
+    $('sessList').innerHTML = (list||[]).map(s=>`<div class="sitem ${s.id===currentId?'active':''}" title="${esc(s.title)}" onclick="loadSession('${s.id}')">${esc(s.title)}</div>`).join('') || '<div style="color:#5a6078;font-size:12px;padding:8px">ยังไม่มีประวัติ</div>';
+  }catch{}
+}
+function renderMessages(){
+  $('chat').innerHTML='';
+  messages.forEach(m=>{ if(m.role==='user') add('user', esc(m.content)); else if(m.role==='assistant' && m.content) add('bot', fmt(m.content)); });
+  if(!$('chat').children.length) $('chat').innerHTML='<div class="hint">เลือกโฟลเดอร์ แล้วสั่งงานได้เลย — ไฟล์ทำงานในเครื่องคุณ, AI คิดผ่าน server</div>';
+}
+async function loadSession(id){
+  const d = await api('/api/sessions/'+id).then(r=>r.json());
+  if(d.error){ alert(d.error); return; }
+  messages = d.messages||[]; currentId = id; if(d.root){ root=d.root; $('rootpath').textContent=d.root; }
+  renderMessages(); loadSessions();
+}
+function newChat(){ messages=[]; currentId=null; $('chat').innerHTML='<div class="hint">เลือกโฟลเดอร์ แล้วสั่งงานได้เลย — ไฟล์ทำงานในเครื่องคุณ, AI คิดผ่าน server</div>'; loadSessions(); }
+async function saveSession(){
+  const title=(messages.find(m=>m.role==='user')||{}).content||'แชทใหม่';
+  try{ const d=await api('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:currentId,title,messages,root})}).then(r=>r.json()); if(d.id){ currentId=d.id; loadSessions(); } }catch{}
+}
 
 // ---- tools (รันในเครื่อง user) ----
 function safe(p){ const abs=path.resolve(root, p||'.'); if(abs!==root && !abs.startsWith(root+path.sep)) throw new Error('path นอกโฟลเดอร์'); return abs; }
@@ -159,7 +198,7 @@ async function send(){
       if(d.error) throw new Error(d.error);
       setQ(d.used, d.quota);
       const m=d.message; messages.push(m);
-      if(!m.tool_calls || !m.tool_calls.length){ thinking.remove(); add('bot', fmt(m.content||'(จบ)')); break; }
+      if(!m.tool_calls || !m.tool_calls.length){ thinking.remove(); add('bot', fmt(m.content||'(จบ)')); saveSession(); break; }
       for(const tc of m.tool_calls){
         let out; try{ out=runTool(tc.function.name, JSON.parse(tc.function.arguments||'{}')); }catch(e){ out='ERROR: '+e.message; }
         steps.push('🔧 '+tc.function.name+' '+(JSON.parse(tc.function.arguments||'{}').path||JSON.parse(tc.function.arguments||'{}').command||'')); thinking.textContent='⏳ '+steps.slice(-7).join('\n');
