@@ -18,6 +18,7 @@ jobs:
           - os: windows-latest
             args: --win
     runs-on: ${{ matrix.os }}
+    environment: main   # ให้ job อ่าน environment secret (GOOGLE_DESKTOP_CLIENT_SECRET) ได้
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
