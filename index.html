@@ -729,7 +729,11 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
   const top=[...a].filter(u=>u.used>0).sort((x,y)=>y.used-x.used).slice(0,8), maxU=top.length?top[0].used:1;
   const chart = top.length ? `<div style="background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:14px;margin-bottom:14px"><div class="lbl" style="margin-bottom:11px">📊 Token สูงสุด (top ${top.length})</div>`+
     top.map(u=>`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62%">${esc(u.email)}${u.role==='admin'?' 👑':''}</span><span style="color:#8a90a6">${fmtN(u.used)}</span></div><div style="height:7px;background:#12141d;border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.round(u.used/maxU*100)}%;background:var(--pri)"></div></div></div>`).join('')+`</div>` : '';
-  $('userList').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:12px">
+  $('userList').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px 14px;margin-bottom:14px">
+      <div><div style="font-size:13.5px;font-weight:600">เห็นแชทของผู้ใช้ทุกคน</div><div class="lbl" style="margin-top:2px">ปิดไว้เพื่อความเป็นส่วนตัว · เปิดเฉพาะตอนต้องตรวจสอบ</div></div>
+      <label class="switch"><input type="checkbox" id="seeAllTgl" ${me.seeAll?'checked':''} onchange="toggleSeeAll(this.checked)"><span class="track"></span></label>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:12px">
       ${card('ผู้ใช้ทั้งหมด',a.length)}
       ${card('🟢 ออนไลน์ตอนนี้',on.users,on.connections+' การเชื่อมต่อ')}
       ${card('Token ใช้ไปรวม',fmtN(totUsed))}
@@ -757,6 +761,7 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
      </td></tr>`).join('')+`</table></div><div class="lbl" style="margin-top:10px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกดบันทึก</div>`;
 }
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
+async function toggleSeeAll(on){ const d=await fetch('/api/seeall',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on})}).then(r=>r.json()); if(me) me.seeAll=d.seeAll; loadSessions(); }
 async function sendMsg(email){
   const text = email ? await promptBox('ส่งข้อความหา '+email+':','','ส่งข้อความ') : ($('bcastMsg')?$('bcastMsg').value.trim():'');
   if(!text) return;

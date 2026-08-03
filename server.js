@@ -52,7 +52,7 @@ const loadUsers = () => db.getUsers();
 const saveUsers = a => db.saveUsers(a);
 const loadTokens = () => db.getTokens();
 const saveTokens = t => db.saveTokens(t);
-const pub = u => u && ({ id: u.id, email: u.email, role: u.role, status: u.status, quota: u.quota, used: u.used });
+const pub = u => u && ({ id: u.id, email: u.email, role: u.role, status: u.status, quota: u.quota, used: u.used, seeAll: !!u.seeAll });
 function hashPw(pw) { const s = crypto.randomBytes(16); return s.toString('hex') + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function verifyPw(pw, stored) { const [s, h] = String(stored).split(':'); if (!s || !h) return false; const a = crypto.scryptSync(pw, Buffer.from(s, 'hex'), 64), b = Buffer.from(h, 'hex'); return a.length === b.length && crypto.timingSafeEqual(a, b); }
 const userByToken = tok => { if (!tok) return null; const uid = loadTokens()[tok]; return uid ? (loadUsers().find(u => u.id === uid) || null) : null; };
@@ -410,6 +410,12 @@ const server = http.createServer(async (req, res) => {
       let disk = null; try { const s = fs.statfsSync('/'); const dt = s.blocks * s.bsize, dfree = s.bfree * s.bsize; disk = { total: dt, used: dt - dfree }; } catch {}
       return J(res, 200, { ram: { total, used: total - free }, disk, load: os.loadavg()[0], cpus: os.cpus().length, uptime: os.uptime(), procRss: process.memoryUsage().rss, node: process.version });
     }
+    if (p === '/api/seeall' && req.method === 'POST') {
+      if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
+      const b = JSON.parse(await readBody(req) || '{}'); const users = loadUsers(); const u = users.find(x => x.id === me.id);
+      if (u) { u.seeAll = !!b.on; saveUsers(users); }
+      return J(res, 200, { ok: true, seeAll: !!(u && u.seeAll) });
+    }
     if (p === '/api/broadcast' && req.method === 'POST') {
       if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
       const b = JSON.parse(await readBody(req) || '{}'); if (!b.text) return J(res, 400, { error: 'ไม่มีข้อความ' });
@@ -463,7 +469,7 @@ const server = http.createServer(async (req, res) => {
       return J(res, 200, { path: abs, parent: path.dirname(abs), dirs });
     }
     // ---- ประวัติ session (owner + แชร์) ----
-    const canSee = rec => rec.owner === me.id || me.role === 'admin' || (rec.shared || []).some(s => s.id === me.id);
+    const canSee = rec => rec.owner === me.id || (me.role === 'admin' && me.seeAll) || (rec.shared || []).some(s => s.id === me.id); // admin เห็นของคนอื่นเฉพาะเมื่อเปิด seeAll
     const canEditS = rec => rec.owner === me.id || (rec.shared || []).some(s => s.id === me.id && s.canEdit);
     if (p === '/api/sessions' && req.method === 'GET') {
       const all = db.listSessions();
