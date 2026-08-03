@@ -8,6 +8,7 @@ import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import crypto from 'node:crypto';
 import * as db from './services/db.js';
+import * as office from './services/office.js';
 const pexec = promisify(exec);
 // ponytail: โหลด .env เอง (node<20.6 ไม่มี process.loadEnvFile) — cwd ก่อน แล้ว fallback ที่โฟลเดอร์ไฟล์
 for (const _f of [path.resolve('.env'), fileURLToPath(new URL('.env', import.meta.url))]) {
@@ -65,6 +66,7 @@ const TOOLS = [
   { type: 'function', function: { name: 'write_file', description: 'สร้าง/เขียนทับไฟล์ (backup อัตโนมัติ)', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } } },
   { type: 'function', function: { name: 'web_search', description: 'ค้นหาข้อมูลบนอินเทอร์เน็ต (คืนหัวข้อ+ลิงก์)', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'generate_image', description: 'สร้างรูปภาพจากคำบรรยาย (ฟรี ไม่มีค่าใช้จ่าย) — คืน URL รูป ให้แสดงต่อ user ด้วย markdown ![](url)', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'คำบรรยายรูป (ภาษาอังกฤษได้ผลดีสุด)' }, width: { type: 'number' }, height: { type: 'number' } }, required: ['prompt'] } } },
+  { type: 'function', function: { name: 'make_file', description: 'สร้างไฟล์ให้ user ดาวน์โหลด รองรับ .xlsx(Excel)/.docx(Word)/.csv/.txt/.md/.html/.json — คืนลิงก์ดาวน์โหลด', parameters: { type: 'object', properties: { filename: { type: 'string', description: 'ชื่อไฟล์พร้อมนามสกุล เช่น report.xlsx, letter.docx, data.csv' }, content: { type: 'string', description: 'เนื้อหา: .xlsx ใส่เป็น CSV (คั่น comma ขึ้นบรรทัดใหม่=แถว), .docx ใส่ข้อความ (ขึ้นบรรทัด=ย่อหน้า), อื่นๆใส่เนื้อหาตรงๆ' } }, required: ['filename', 'content'] } } },
   { type: 'function', function: { name: 'fetch_url', description: 'อ่านเนื้อหาหน้าเว็บจาก URL (คืนข้อความ)', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
   { type: 'function', function: { name: 'run_command', description: 'รันคำสั่ง shell ในโฟลเดอร์โปรเจกต์ (เช่น ls, npm test, git status)', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } },
   { type: 'function', function: { name: 'notify', description: 'ส่งข้อความ/ความคืบหน้าให้ user ทันที — ใช้บอกแผน+เวลาที่ประเมินก่อนเริ่มงาน และอัปเดตระหว่างงานยาว', parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] } } },
@@ -94,6 +96,19 @@ async function runTool(name, args, allowWrite, allowShell, log, root, onNotify) 
   if (name === 'generate_image') {
     const url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(args.prompt || '') + '?width=' + (Number(args.width) || 1024) + '&height=' + (Number(args.height) || 1024) + '&nologo=true&model=flux';
     return 'สร้างรูปสำเร็จ — ตอบ user โดยแทรกรูปด้วย markdown: ![image](' + url + ')';
+  }
+  if (name === 'make_file') {
+    const fn = (args.filename || 'file.txt').replace(/[^\w.\-ก-๙]+/g, '_').slice(0, 80);
+    const ext = (fn.split('.').pop() || 'txt').toLowerCase();
+    const content = args.content || '';
+    let data;
+    if (ext === 'xlsx') data = office.xlsx(office.parseCSV(content));
+    else if (ext === 'docx') data = office.docx(content);
+    else data = Buffer.from(content, 'utf8'); // txt/csv/md/html/json/xml/...
+    const dir = path.join(DIR, 'userfiles'); fs.mkdirSync(dir, { recursive: true });
+    const key = crypto.randomBytes(8).toString('hex') + '-' + fn;
+    fs.writeFileSync(path.join(dir, key), data);
+    return 'สร้างไฟล์สำเร็จ (' + data.length + ' bytes) — ให้ลิงก์ดาวน์โหลดกับ user ด้วย markdown: [ดาวน์โหลด ' + fn + '](/userfiles/' + key + ')';
   }
   if (name === 'bg_list') { return [...JOBS.values()].map(j => j.id + ' [' + j.status + '] ' + j.cmd.slice(0, 50)).join('\n') || 'ไม่มี background job'; }
   if (name === 'bg_start') {
@@ -189,6 +204,7 @@ const sysPrompt = (root) => `คุณคือ "AI Agent" ผู้ช่วย
 ⚠️ ตอบเป็น "ภาษาไทย" เท่านั้น 100% ห้ามใช้ภาษาจีนหรือภาษาอื่นเด็ดขาด (ยกเว้นโค้ด ชื่อเฉพาะ หรือข้อความที่ผู้ใช้พิมพ์มาเป็นภาษาอื่น) แม้แต่คำเดียวก็ห้าม
 - ต้องการสร้างรูป ให้ใช้ tool generate_image (ฟรี) แล้วแทรกรูปในคำตอบด้วย markdown ![](url)
 - ถ้าต้องอธิบาย flow / ผังงาน / ลำดับขั้น / สถาปัตยกรรม / diagram ให้วาดด้วย Mermaid ในบล็อก \`\`\`mermaid ... \`\`\` (เว็บจะ render เป็นแผนภาพให้อัตโนมัติ)
+- ผู้ใช้อยากได้ไฟล์ (Excel/Word/CSV/txt) ให้ใช้ tool make_file แล้วส่งลิงก์ดาวน์โหลดให้ (xlsx ใส่ content เป็น CSV, docx ใส่เป็นข้อความ)
 คุณเป็นผู้ช่วยเขียนโค้ด + ค้นคว้าข้อมูล เข้าถึงไฟล์ในโปรเจกต์ได้ (root = ${root})
 - ไฟล์: ใช้ list_dir/read_file สำรวจก่อน, อ่านก่อนแก้, แก้ให้น้อยที่สุด, path สัมพัทธ์กับ root
 - อินเทอร์เน็ต: ใช้ web_search หาข้อมูล แล้ว fetch_url อ่านหน้าที่เกี่ยวข้องเพื่อดึงรายละเอียด
@@ -443,10 +459,10 @@ const server = http.createServer(async (req, res) => {
     const fp = path.join(DIR, p === '/' ? 'index.html' : path.normalize(p));
     if (fp.startsWith(DIR) && fs.existsSync(fp) && fs.statSync(fp).isFile()) {
       const ext = path.extname(fp).toLowerCase();
-      const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.zip': 'application/zip', '.dmg': 'application/octet-stream', '.exe': 'application/octet-stream', '.yml': 'text/yaml', '.blockmap': 'application/octet-stream' };
+      const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.zip': 'application/zip', '.dmg': 'application/octet-stream', '.exe': 'application/octet-stream', '.yml': 'text/yaml', '.blockmap': 'application/octet-stream', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.csv': 'text/csv; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8' };
       const st = fs.statSync(fp);
       const h = { 'content-type': types[ext] || 'text/plain', 'content-length': st.size };
-      if (['.dmg', '.exe', '.zip'].includes(ext)) h['content-disposition'] = 'attachment; filename="' + path.basename(fp) + '"';
+      if (['.dmg', '.exe', '.zip'].includes(ext) || p.startsWith('/userfiles/')) h['content-disposition'] = 'attachment; filename="' + path.basename(fp) + '"';
       res.writeHead(200, h);
       return fs.createReadStream(fp).pipe(res); // stream กันไฟล์ใหญ่กินแรม
     }

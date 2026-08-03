@@ -274,6 +274,7 @@ const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&
 // render markdown แบบเบาๆ: code block + inline code/path พร้อมปุ่มคัดลอก
 function inlineFmt(s){ return esc(s)
   .replace(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g, '<img src="$1" loading="lazy" style="max-width:100%;border-radius:8px;margin:6px 0;display:block">')
+  .replace(/\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g, (m,t,u)=>`<a href="${u}" ${u.startsWith('/')?'download':'target="_blank" rel="noopener"'} style="color:#8ab4ff">${t}</a>`)
   .replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>'); }
 function codeBlock(code, lang){ return `<div class="codewrap"><div class="codehdr"><span>${esc(lang || 'code')}</span><button class="copy" data-c="${encodeURIComponent(code)}" onclick="copyCode(this)">📋 คัดลอก</button></div><pre class="code">${esc(code)}</pre></div>`; }
 function fmt(text){
