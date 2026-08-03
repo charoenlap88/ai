@@ -38,6 +38,9 @@
   #login input,#login select{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:10px 12px;font:inherit;margin-bottom:8px}
   #login input:focus{outline:none;border-color:var(--pri)}
   .hint{color:#8a90a6;font-size:13px;text-align:center;margin:auto}
+  .opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .optbtn{background:#1a1e2b;border:1px solid var(--pri);color:#cdd3e6;padding:8px 15px;border-radius:20px;cursor:pointer;font:inherit;font-size:13px}
+  .optbtn:hover{background:var(--pri);color:#fff}
   .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:250}
   .ov .box2{background:#171a24;border:1px solid #2a2f42;border-radius:14px;width:360px;max-width:92vw;padding:22px}
   .toast{position:fixed;top:14px;left:50%;transform:translate(-50%,-20px);background:#1a1e2b;border:1px solid var(--pri);color:#e6e8ef;padding:12px 18px;border-radius:12px;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:300;opacity:0;transition:.3s;max-width:90vw}
@@ -213,13 +216,17 @@ const TOOLS = [
   {type:'function',function:{name:'bg_resume',description:'ต่อ job',parameters:{type:'object',properties:{id:{type:'string'}},required:['id']}}},
   {type:'function',function:{name:'bg_list',description:'ลิสต์ background jobs',parameters:{type:'object',properties:{},required:[]}}},
 ];
-const SYS = () => ({ role:'system', content:`คุณเป็นผู้ช่วยเขียนโค้ดที่เข้าถึงไฟล์ในเครื่องผู้ใช้ได้ (root = ${root}). ใช้ tool สำรวจก่อน อ่านก่อนแก้ แก้ให้น้อยที่สุด สรุปเป็นภาษาไทย.
+const SYS = () => ({ role:'system', content:`คุณคือ AI Agent ทำงานด้วยโมเดล DeepSeek — ตอบเป็นภาษาไทยเท่านั้น 100% ห้ามใช้ภาษาจีน/ภาษาอื่นเด็ดขาด (ยกเว้นโค้ด/ชื่อเฉพาะ)
+ถ้าคำตอบเป็นคำถามให้ผู้ใช้เลือก ให้จบด้วยบล็อก \`\`\`options (แต่ละบรรทัด=1 ตัวเลือกสั้นๆ) แอปจะแสดงเป็นปุ่มกดได้
+คุณเป็นผู้ช่วยเขียนโค้ดที่เข้าถึงไฟล์ในเครื่องผู้ใช้ได้ (root = ${root}). ใช้ tool สำรวจก่อน อ่านก่อนแก้ แก้ให้น้อยที่สุด สรุปเป็นภาษาไทย.
 ⏱️ ทุกครั้งที่รับงานใหม่ ก่อนลงมือ ให้เรียก notify 1 ครั้งก่อนเสมอ: (1) วิเคราะห์งานสั้นๆ (2) ประเมินเวลาที่จะใช้.
 🔄 งานยาว (build/ติดตั้ง/สคริปต์) ให้ bg_start เป็น background แล้ว bg_status ดูว่าใกล้เสร็จยัง · bg_pause/bg_resume/bg_stop · notify อัปเดตเป็นระยะ.` });
 
 // ---- chat UI + loop ----
 function add(cls, html){ const d=document.createElement('div'); d.className='msg '+cls; d.innerHTML=html; $('chat').appendChild(d); $('chat').scrollTop=1e9; return d; }
-function fmt(t){ return esc(t).replace(/```(\w*)\n?([\s\S]*?)```/g,(m,l,c)=>`<pre class="code">${esc(c)}</pre>`).replace(/`([^`\n]+)`/g,'<code style="background:#232a3d;color:#9fd0ff;padding:1px 5px;border-radius:4px">$1</code>'); }
+function fmt(t){ return esc(t).replace(/```(\w*)\n?([\s\S]*?)```/g,(m,l,c)=> l==='options' ? optionsDiv(c) : `<pre class="code">${c}</pre>`).replace(/`([^`\n]+)`/g,'<code style="background:#232a3d;color:#9fd0ff;padding:1px 5px;border-radius:4px">$1</code>'); }
+function optionsDiv(code){ const opts=code.split('\n').map(l=>l.trim().replace(/^[-*\d.)\s]+/,'').trim()).filter(Boolean); return '<div class="opts">'+opts.map(o=>`<button class="optbtn" onclick="pickOption(this)">${o}</button>`).join('')+'</div>'; }
+function pickOption(b){ $('inp').value=b.textContent; send(); }
 async function send(){
   if(!root){ alert('เลือกโฟลเดอร์ก่อน'); return; }
   const text=$('inp').value.trim(); if(!text) return;

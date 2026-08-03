@@ -62,14 +62,16 @@ function createWindow() {
   win.loadFile('index.html');
   win.on('close', e => { if (!quitting) { e.preventDefault(); win.hide(); } }); // ปิดหน้าต่าง = ยุบลง system tray
 }
-// ตรวจอัปเดตแบบกดเอง (คืน true=เริ่มตรวจ) — ถ้ามีจะเด้ง dialog ให้รีสตาร์ทเหมือนตอนเปิดแอป
-ipcMain.handle('check-update', () => { try { require('electron-updater').autoUpdater.checkForUpdates(); return true; } catch { return false; } });
-ipcMain.handle('app-version', () => app.getVersion());
-// เช็คอัปเดตจาก https://ai.charoenlap.com/downloads/ (โหลด+ติดตั้งเอง แจ้งเตือนเมื่อพร้อม)
+let manualCheck = false;
+// ตั้ง event ครั้งเดียว + เช็คอัปเดตจาก https://ai.charoenlap.com/downloads/ (โหลด+ติดตั้งเอง)
 function checkUpdates() {
   try {
     const { autoUpdater } = require('electron-updater');
+    autoUpdater.on('update-available', () => { if (manualCheck) dialog.showMessageBox({ type: 'info', message: 'พบเวอร์ชันใหม่ กำลังดาวน์โหลด...' }); });
+    autoUpdater.on('update-not-available', () => { if (manualCheck) { manualCheck = false; dialog.showMessageBox({ type: 'info', message: 'เป็นเวอร์ชันล่าสุดแล้ว (v' + app.getVersion() + ')' }); } });
+    autoUpdater.on('error', e => { if (manualCheck) { manualCheck = false; dialog.showMessageBox({ type: 'error', message: 'ตรวจอัปเดตไม่สำเร็จ: ' + (e && e.message || e) }); } });
     autoUpdater.on('update-downloaded', () => {
+      manualCheck = false;
       dialog.showMessageBox({ type: 'info', buttons: ['รีสตาร์ทเลย', 'ทีหลัง'], defaultId: 0,
         title: 'มีเวอร์ชันใหม่', message: 'ดาวน์โหลดอัปเดตเสร็จแล้ว — รีสตาร์ทเพื่อใช้เวอร์ชันใหม่' })
         .then(r => { if (r.response === 0) autoUpdater.quitAndInstall(); });
@@ -77,6 +79,9 @@ function checkUpdates() {
     autoUpdater.checkForUpdatesAndNotify();
   } catch (e) { /* dev mode / ไม่มี feed → ข้าม */ }
 }
+// กดปุ่ม ⟳ อัปเดต ในแอป → ตรวจ + เด้งผลให้เห็น
+ipcMain.handle('check-update', () => { try { manualCheck = true; require('electron-updater').autoUpdater.checkForUpdates(); return true; } catch { return false; } });
+ipcMain.handle('app-version', () => app.getVersion());
 app.whenReady().then(() => { createWindow(); createTray(); checkUpdates(); });
 app.on('window-all-closed', () => {}); // ไม่ quit — อยู่ใน system tray ต่อ
 app.on('activate', () => { if (win) { win.show(); win.focus(); } });

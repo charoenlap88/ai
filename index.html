@@ -56,6 +56,9 @@
   .mab{display:inline-flex;align-items:center;gap:5px;background:#0f1117;border:1px solid #2a2f42;color:#8a90a6;font-size:11.5px;padding:4px 9px;border-radius:8px;cursor:pointer;font-family:inherit}
   .mab:hover{border-color:var(--pri);color:#cdd3e6}
   .send.stop{background:#c0392b}
+  .opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .optbtn{background:#1a1e2b;border:1px solid var(--pri);color:#cdd3e6;padding:8px 15px;border-radius:20px;cursor:pointer;font:inherit;font-size:13px;transition:.15s}
+  .optbtn:hover{background:var(--pri);color:#fff}
   .toast{position:fixed;top:16px;left:50%;transform:translate(-50%,-20px);background:#1a1e2b;border:1px solid var(--pri);color:#e6e8ef;padding:12px 18px;border-radius:12px;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:200;opacity:0;transition:.3s;max-width:90vw}
   .toast.show{opacity:1;transform:translate(-50%,0)}
   .toast b{color:#8ab4ff;font-size:11.5px}
@@ -283,10 +286,14 @@ function codeBlock(code, lang){ return `<div class="codewrap"><div class="codehd
 function fmt(text){
   const fence = /```(\w*)\n?([\s\S]*?)```/g; let html = '', last = 0, m;
   while ((m = fence.exec(text))) { html += inlineFmt(text.slice(last, m.index)); const code = m[2].replace(/\n$/, '');
-    html += (m[1] === 'mermaid') ? `<div class="mermaid" data-src="${btoa(unescape(encodeURIComponent(code)))}"></div>` : codeBlock(code, m[1]);
+    html += (m[1] === 'mermaid') ? `<div class="mermaid" data-src="${btoa(unescape(encodeURIComponent(code)))}"></div>`
+      : (m[1] === 'options') ? optionsDiv(code) : codeBlock(code, m[1]);
     last = fence.lastIndex; }
   return html + inlineFmt(text.slice(last));
 }
+function optionsDiv(code){ const opts=code.split('\n').map(l=>l.trim().replace(/^[-*\d.)\s]+/,'').trim()).filter(Boolean);
+  return '<div class="opts">'+opts.map(o=>`<button class="optbtn" onclick="pickOption(this)">${esc(o)}</button>`).join('')+'</div>'; }
+function pickOption(b){ if(genController) return; $('inp').value=b.textContent; send(); }
 let mermaidInit=false;
 function renderMermaid(el){
   const nodes=[...el.querySelectorAll('.mermaid[data-src]')]; if(!nodes.length) return;
