@@ -90,6 +90,14 @@ const TOOLS = [
   { type: 'function', function: { name: 'bg_list', description: 'ลิสต์ background jobs ทั้งหมด', parameters: { type: 'object', properties: {}, required: [] } } },
 ];
 const JOBS = new Map(); // background jobs: id -> {proc, status, out[], cmd, started}
+const TASKS = new Map(); // userId -> [{id,title,status,created,done}] แผนงานที่ AI สร้าง (in-memory)
+const userTasks = uid => { if (!TASKS.has(uid)) TASKS.set(uid, []); return TASKS.get(uid); };
+const wsTasks = uid => wsBroadcast({ type: 'tasks', tasks: userTasks(uid) }, uid); // push แผงงานล่าสุดให้ UI
+const TASK_TOOLS = [
+  { type: 'function', function: { name: 'task_add', description: 'เพิ่มงานย่อยลงแผนงาน (แสดงเป็น checklist ให้ user เห็นสถานะเรียงก่อน/หลัง) — คืน id · ใช้เมื่องานมีหลายขั้นตอน', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } } },
+  { type: 'function', function: { name: 'task_update', description: 'อัปเดตสถานะงานย่อย: running (กำลังทำ) / done (เสร็จ) / failed (ล้มเหลว)', parameters: { type: 'object', properties: { id: { type: 'string' }, status: { type: 'string' } }, required: ['id', 'status'] } } },
+  { type: 'function', function: { name: 'task_list', description: 'ดูรายการงานย่อยทั้งหมดพร้อมสถานะ (ใช้เช็คว่าทำถึงไหนแล้ว จะได้ทำงานต่อ)', parameters: { type: 'object', properties: {}, required: [] } } },
+];
 
 function stripHtml(h) {
   return h.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -125,7 +133,13 @@ async function extractText(name, buf) {
   return buf.toString('utf8'); // txt/csv/md/json/code
 }
 
-async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, ext) {
+async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, ext, uid) {
+  if (name.startsWith('task_')) {
+    const arr = userTasks(uid || 'anon');
+    if (name === 'task_add') { const t = { id: 'tk' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), title: String(args.title || 'งาน').slice(0, 140), status: 'pending', created: Date.now() }; arr.push(t); wsTasks(uid); return 'เพิ่มงาน: "' + t.title + '" (id ' + t.id + ')'; }
+    if (name === 'task_update') { const t = arr.find(x => x.id === args.id); if (!t) return 'ไม่พบงาน ' + args.id; t.status = args.status || t.status; if (t.status === 'done' || t.status === 'failed') t.done = Date.now(); wsTasks(uid); if (t.status === 'done') wsBroadcast({ type: 'task_done', title: t.title }, uid); return 'อัปเดต "' + t.title + '" → ' + t.status; }
+    if (name === 'task_list') { return arr.length ? arr.map(t => '[' + t.status + '] ' + t.title).join('\n') : 'ยังไม่มีงานในแผน'; }
+  }
   const ek = Object.keys(EXTS).find(k => EXTS[k].TOOLS.some(t => t.function.name === name));
   if (ek) {
     if (!ext || !ext[ek] || !ext[ek].enabled) return 'ยังไม่ได้เปิด/ตั้งค่า extension ' + EXTS[ek].meta.name + ' (ไปที่เมนู Extensions)';
@@ -245,6 +259,7 @@ const sysPrompt = (root, isAdmin) => `คุณคือ "AI Agent" ผู้ช
 - ต้องการสร้างรูป ให้ใช้ tool generate_image (ฟรี) แล้วแทรกรูปในคำตอบด้วย markdown ![](url)
 - ถ้าต้องอธิบาย flow / ผังงาน / ลำดับขั้น / สถาปัตยกรรม / diagram ให้วาดด้วย Mermaid ในบล็อก \`\`\`mermaid ... \`\`\` (เว็บจะ render เป็นแผนภาพให้อัตโนมัติ)
 - ผู้ใช้อยากได้ไฟล์ (Excel/Word/CSV/txt) ให้ใช้ tool make_file แล้วส่งลิงก์ดาวน์โหลดให้ (xlsx ใส่ content เป็น CSV, docx ใส่เป็นข้อความ)
+- 📋 งานที่มีหลายขั้นตอน ให้วางแผนด้วย task_add (สร้าง checklist) แล้วอัปเดต task_update เป็น running/done ตอนทำแต่ละขั้น (user จะเห็นแผงงานสถานะ real-time)
 - ⭐ ถ้าคำตอบเป็น "คำถามให้ผู้ใช้เลือก" (เช่น ถามว่าจะทำแบบไหน/เลือกอะไร) ให้จบด้วยบล็อก \`\`\`options โดยแต่ละบรรทัด = 1 ตัวเลือก (สั้นๆ) เว็บจะแสดงเป็นปุ่มให้กดได้เลย เช่น:\n\`\`\`options\nใช่ ทำเลย\nไม่ ขอแบบอื่น\n\`\`\`
 คุณเป็นผู้ช่วยเขียนโค้ด + ค้นคว้าข้อมูล เข้าถึงไฟล์ในโปรเจกต์ได้ (root = ${root})
 - ไฟล์: ใช้ list_dir/read_file สำรวจก่อน, อ่านก่อนแก้, แก้ให้น้อยที่สุด, path สัมพัทธ์กับ root
@@ -256,10 +271,10 @@ const sysPrompt = (root, isAdmin) => `คุณคือ "AI Agent" ผู้ช
 - ทำเสร็จสรุปสั้นๆ เป็นภาษาไทย พร้อมอ้างอิงลิงก์ที่ใช้
 ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (ต้องทำตามเคร่งครัด) =====\n' + AGENT_RULES : ''}`;
 
-async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin) {
+async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
-  let tools = TOOLS; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // extension เปิด = เพิ่ม tool
+  let tools = [...TOOLS, ...TASK_TOOLS]; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // task + extension
   const msgs = [{ role: 'system', content: sysPrompt(root, isAdmin) }, ...messages];
   const MAX = Number(process.env.MAX_ROUNDS) || 100; // ทำต่อเนื่องจนจบ (backstop กัน runaway)
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
@@ -294,7 +309,7 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ex
         return { reply: 'หยุดอัตโนมัติ — agent เรียกคำสั่งเดิมซ้ำหลายรอบ (งานนี้อาจทำไม่ได้/ไม่มีข้อมูลให้ทำต่อ)', actions: log.items, truncated: true, tokens: totalTokens };
       }
       let out;
-      try { out = await runTool(tc.function.name, JSON.parse(tc.function.arguments || '{}'), allowWrite, allowShell, log, root, onNotify, ext); }
+      try { out = await runTool(tc.function.name, JSON.parse(tc.function.arguments || '{}'), allowWrite, allowShell, log, root, onNotify, ext, uid); }
       catch (e) { out = 'ERROR: ' + e.message; log.push('❌ ' + e.message); }
       msgs.push({ role: 'tool', tool_call_id: tc.id, content: String(out) });
     }
@@ -310,7 +325,7 @@ async function runTask(t) {
   const root = isAdmin ? (t.root || DEFAULT_ROOT) : path.join(DIR, 'workspaces', t.owner || 'anon');
   if (!isAdmin) fs.mkdirSync(root, { recursive: true });
   try {
-    const out = await chat([{ role: 'user', content: t.prompt }], isAdmin && t.allowWrite, isAdmin && t.allowShell, null, root, null, owner && owner.ext, isAdmin);
+    const out = await chat([{ role: 'user', content: t.prompt }], isAdmin && t.allowWrite, isAdmin && t.allowShell, null, root, null, owner && owner.ext, isAdmin, t.owner);
     if (t.owner) addUsage(t.owner, out.tokens); // นับ quota ให้เจ้าของงาน
     const sid = 'sched-' + Date.now();
     db.putSession({ id: sid, owner: t.owner, title: '[⏰] ' + t.prompt.slice(0, 50), messages: [{ role: 'user', content: t.prompt }, { role: 'assistant', content: out.reply }], root, updated: new Date().toISOString() });
@@ -404,6 +419,8 @@ const server = http.createServer(async (req, res) => {
       const list = [...wsClients.entries()].map(([uid, set]) => { const u = loadUsers().find(x => x.id === uid); return { email: u ? u.email : uid, conns: set.size }; });
       return J(res, 200, { users: wsClients.size, connections: list.reduce((a, b) => a + b.conns, 0), list });
     }
+    if (p === '/api/tasks' && req.method === 'GET') return J(res, 200, userTasks(me.id));
+    if (p === '/api/tasks/clear' && req.method === 'POST') { TASKS.set(me.id, []); return J(res, 200, { ok: true }); }
     if (p === '/api/serverstat' && req.method === 'GET') {
       if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
       const total = os.totalmem(), free = os.freemem();
@@ -549,7 +566,7 @@ const server = http.createServer(async (req, res) => {
         : (fs.mkdirSync(path.join(DIR, 'workspaces', me.id), { recursive: true }), path.join(DIR, 'workspaces', me.id));
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       try {
-        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin);
+        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin, me.id);
         addUsage(me.id, out.tokens); // นับ quota
         out.used = (me.used || 0) + (out.tokens || 0); out.quota = me.quota;
         res.write(JSON.stringify({ type: 'done', ...out }) + '\n');

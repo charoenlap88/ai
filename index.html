@@ -53,6 +53,7 @@
   .thchip{display:flex;align-items:center;gap:6px;width:fit-content;margin-top:9px;background:#0f1117;border:1px solid #2a2f42;color:#8a90a6;font-size:11.5px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:inherit}
   .thchip:hover{border-color:var(--pri);color:#cdd3e6}
   .mermaid{background:#0f1117;border:1px solid #2a2f42;border-radius:10px;padding:12px;margin:8px 0;overflow-x:auto;text-align:center}
+  @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.3}}
   .msgact{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
   .mab{display:inline-flex;align-items:center;gap:5px;background:#0f1117;border:1px solid #2a2f42;color:#8a90a6;font-size:11.5px;padding:4px 9px;border-radius:8px;cursor:pointer;font-family:inherit}
   .mab:hover{border-color:var(--pri);color:#cdd3e6}
@@ -154,7 +155,8 @@
 <div id="backdrop" onclick="toggleSide(false)"></div>
 <aside class="side">
   <div class="sec"><button class="btn pri full" onclick="newChat()">+ แชทใหม่</button>
-    <button class="btn full" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px" onclick="openSched()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> งานตามเวลา</button></div>
+    <button class="btn full" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px" onclick="openSched()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> งานตามเวลา</button>
+    <button class="btn full" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:7px" onclick="openTasks()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> แผงงาน <span id="taskBadge" style="display:none;background:var(--pri);color:#fff;border-radius:10px;font-size:11px;padding:1px 7px"></span></button></div>
   <div class="lbl" style="padding:8px 12px 0">ประวัติ</div>
   <div style="padding:2px 10px 4px"><input id="sessSearch" placeholder="ค้นหาประวัติ..." oninput="loadSessions()" style="width:100%;background:#12141d;border:1px solid #2a2f42;color:#fff;border-radius:9px;padding:7px 11px;font:inherit;font-size:12.5px"></div>
   <div class="sess" id="sessList"></div>
@@ -262,6 +264,14 @@
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> ตั้งค่า</h3>
     <div class="mbody" id="setBody"></div>
     <div class="mfoot"><button class="btn pri" style="flex:1" onclick="$('ovSettings').classList.remove('on')">เสร็จ</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovTasks" onclick="if(event.target===this)$('ovTasks').classList.remove('on')">
+  <div class="modal" style="width:520px;max-height:82vh">
+    <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> แผงงาน (Tasks)</h3>
+    <div class="mbody" id="tasksBody"></div>
+    <div class="mfoot"><button class="btn" onclick="clearTasks()">ล้างที่เสร็จแล้ว</button><button class="btn pri" onclick="$('ovTasks').classList.remove('on')">ปิด</button></div>
   </div>
 </div>
 
@@ -656,14 +666,19 @@ function renderSettings(){
 function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions();
   const admin = me.role==='admin';
   for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
-  connectWS();
+  connectWS(); refreshTasks();
 }
 let ws=null;
 function connectWS(){
   if(!authToken) return;
   try{
     ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws?token='+encodeURIComponent(authToken));
-    ws.onmessage = e => { try{ const m=JSON.parse(e.data); if(m.type==='admin_message') toast(m.text); else if(m.type==='reload') location.reload(); }catch{} };
+    ws.onmessage = e => { try{ const m=JSON.parse(e.data);
+      if(m.type==='admin_message') toast(m.text);
+      else if(m.type==='reload') location.reload();
+      else if(m.type==='tasks'){ _tasks=m.tasks||[]; updateTaskBadge(); if($('ovTasks').classList.contains('on')) renderTasks(); }
+      else if(m.type==='task_done') toast('✅ งานเสร็จ: '+m.title);
+    }catch{} };
     ws.onclose = () => { ws=null; setTimeout(()=>{ if(authToken) connectWS(); }, 5000); }; // reconnect
   }catch{}
 }
@@ -776,6 +791,20 @@ async function resetPw(id,email){
   alertBox(d.error ? d.error : ('ตั้งรหัสผ่านใหม่ให้ '+email+' แล้ว'));
 }
 
+// ---- แผงงาน (Tasks) ----
+let _tasks=[];
+const TASK_ST={pending:{t:'รอ',c:'#5a6078'},running:{t:'กำลังทำ',c:'#4d9bff'},done:{t:'เสร็จ',c:'#10b981'},failed:{t:'ล้มเหลว',c:'#ef4444'}};
+function updateTaskBadge(){ const b=$('taskBadge'); if(!b)return; const n=_tasks.filter(t=>t.status==='running'||t.status==='pending').length; b.style.display=n?'inline-block':'none'; b.textContent=n; }
+function renderTasks(){ const el=$('tasksBody'); if(!el)return;
+  el.innerHTML=_tasks.length? _tasks.map(t=>{ const s=TASK_ST[t.status]||TASK_ST.pending;
+    return `<div style="display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid #1c2030">
+      <span style="width:10px;height:10px;border-radius:50%;background:${s.c};flex:none${t.status==='running'?';animation:pulse2 1.1s infinite':''}"></span>
+      <span style="flex:1;font-size:13.5px;${t.status==='done'?'color:#7a8098;text-decoration:line-through':''}">${esc(t.title)}</span>
+      <span style="font-size:11px;color:${s.c}">${s.t}</span></div>`; }).join('') : '<div class="hint" style="padding:26px">ยังไม่มีงาน — สั่ง AI ทำงานที่มีหลายขั้นตอน แล้วแผนงาน+สถานะจะโผล่ที่นี่แบบ real-time</div>';
+}
+async function openTasks(){ _tasks=await fetch('/api/tasks').then(r=>r.json()).catch(()=>[]); renderTasks(); updateTaskBadge(); $('ovTasks').classList.add('on'); }
+async function clearTasks(){ await fetch('/api/tasks/clear',{method:'POST'}); _tasks=[]; renderTasks(); updateTaskBadge(); }
+async function refreshTasks(){ _tasks=await fetch('/api/tasks').then(r=>r.json()).catch(()=>[]); updateTaskBadge(); }
 // ---- คลัง prompt ----
 const BUILTIN_PROMPTS=['สรุปไฟล์ที่แนบให้เป็นข้อๆ','ช่วยตรวจแก้ข้อความนี้ให้เป็นทางการ:','แปลเป็นภาษาอังกฤษ:','เขียน commit message จากการเปลี่ยนแปลงนี้','อธิบายโค้ดนี้ทีละส่วน','หา bug ในโค้ดนี้ พร้อมวิธีแก้','สร้างไฟล์ Excel สรุป...','วาด flowchart ของ...','สร้างรูปภาพ:'];
 function loadPrompts(){ try{ return JSON.parse(localStorage.getItem('dsprompts'))||[]; }catch{ return []; } }
