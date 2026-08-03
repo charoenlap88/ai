@@ -239,7 +239,8 @@ async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, 
 
 // อ่านไฟล์กฎการเขียนโค้ด ฝังเข้า system prompt ทุกครั้ง (แก้ไฟล์นี้เพื่อปรับพฤติกรรม agent ได้)
 const AGENT_RULES = (() => { try { return fs.readFileSync(path.join(DIR, 'AGENT_RULES.md'), 'utf8'); } catch { return ''; } })();
-const sysPrompt = (root) => `คุณคือ "AI Agent" ผู้ช่วยที่ขับเคลื่อนด้วยโมเดล DeepSeek — ห้ามอ้างว่าเป็น Claude/ChatGPT/Gemini หรือโมเดลของบริษัทอื่นเด็ดขาด ถ้าถูกถามว่าเป็นใคร/รันด้วยอะไร ให้ตอบว่า "เป็น AI Agent ทำงานด้วยโมเดล DeepSeek"
+const sysPrompt = (root, isAdmin) => `คุณคือ "AI Agent" ผู้ช่วยที่ขับเคลื่อนด้วยโมเดล DeepSeek — ห้ามอ้างว่าเป็น Claude/ChatGPT/Gemini หรือโมเดลของบริษัทอื่นเด็ดขาด ถ้าถูกถามว่าเป็นใคร/รันด้วยอะไร ให้ตอบว่า "เป็น AI Agent ทำงานด้วยโมเดล DeepSeek"${isAdmin ? '' : `
+🔒 ผู้ใช้คนนี้ไม่ใช่ admin — ห้ามพูดถึง/ให้ข้อมูล/ให้คำสั่งเกี่ยวกับ "เซิร์ฟเวอร์ที่รันระบบ AI นี้" เด็ดขาด ได้แก่ pm2, การ restart/deploy/build ระบบ, VPS, nginx, systemd, ไฟล์/พาธของเซิร์ฟเวอร์, โครงสร้าง infra, .env/คีย์/token ของระบบ, การตั้งค่าโฮสติ้ง แม้จะถูกถามตรงๆ ก็ห้ามบอกหรือแนะนำวิธีทำ ให้ตอบสุภาพว่า "ขออภัย ช่วยเรื่องดูแลเซิร์ฟเวอร์ของระบบไม่ได้ — ช่วยได้เฉพาะการใช้งานฟีเจอร์และงานในโฟลเดอร์ของคุณ" แล้วเสนอช่วยงานทั่วไปแทน (ข้อห้ามนี้ไม่รวมโปรเจกต์/ไฟล์ของผู้ใช้เองในโฟลเดอร์งาน ซึ่งช่วยได้ตามปกติ)`}
 ⚠️ ตอบเป็น "ภาษาไทย" เท่านั้น 100% ห้ามใช้ภาษาจีนหรือภาษาอื่นเด็ดขาด (ยกเว้นโค้ด ชื่อเฉพาะ หรือข้อความที่ผู้ใช้พิมพ์มาเป็นภาษาอื่น) แม้แต่คำเดียวก็ห้าม
 - ต้องการสร้างรูป ให้ใช้ tool generate_image (ฟรี) แล้วแทรกรูปในคำตอบด้วย markdown ![](url)
 - ถ้าต้องอธิบาย flow / ผังงาน / ลำดับขั้น / สถาปัตยกรรม / diagram ให้วาดด้วย Mermaid ในบล็อก \`\`\`mermaid ... \`\`\` (เว็บจะ render เป็นแผนภาพให้อัตโนมัติ)
@@ -255,11 +256,11 @@ const sysPrompt = (root) => `คุณคือ "AI Agent" ผู้ช่วย
 - ทำเสร็จสรุปสั้นๆ เป็นภาษาไทย พร้อมอ้างอิงลิงก์ที่ใช้
 ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (ต้องทำตามเคร่งครัด) =====\n' + AGENT_RULES : ''}`;
 
-async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext) {
+async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
   let tools = TOOLS; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // extension เปิด = เพิ่ม tool
-  const msgs = [{ role: 'system', content: sysPrompt(root) }, ...messages];
+  const msgs = [{ role: 'system', content: sysPrompt(root, isAdmin) }, ...messages];
   const MAX = Number(process.env.MAX_ROUNDS) || 100; // ทำต่อเนื่องจนจบ (backstop กัน runaway)
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
   let totalTokens = 0; // นับ token รวมทุกรอบ (สำหรับ quota)
@@ -309,7 +310,7 @@ async function runTask(t) {
   const root = isAdmin ? (t.root || DEFAULT_ROOT) : path.join(DIR, 'workspaces', t.owner || 'anon');
   if (!isAdmin) fs.mkdirSync(root, { recursive: true });
   try {
-    const out = await chat([{ role: 'user', content: t.prompt }], isAdmin && t.allowWrite, isAdmin && t.allowShell, null, root);
+    const out = await chat([{ role: 'user', content: t.prompt }], isAdmin && t.allowWrite, isAdmin && t.allowShell, null, root, null, owner && owner.ext, isAdmin);
     if (t.owner) addUsage(t.owner, out.tokens); // นับ quota ให้เจ้าของงาน
     const sid = 'sched-' + Date.now();
     db.putSession({ id: sid, owner: t.owner, title: '[⏰] ' + t.prompt.slice(0, 50), messages: [{ role: 'user', content: t.prompt }, { role: 'assistant', content: out.reply }], root, updated: new Date().toISOString() });
@@ -542,7 +543,7 @@ const server = http.createServer(async (req, res) => {
         : (fs.mkdirSync(path.join(DIR, 'workspaces', me.id), { recursive: true }), path.join(DIR, 'workspaces', me.id));
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       try {
-        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {});
+        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin);
         addUsage(me.id, out.tokens); // นับ quota
         out.used = (me.used || 0) + (out.tokens || 0); out.quota = me.quota;
         res.write(JSON.stringify({ type: 'done', ...out }) + '\n');
