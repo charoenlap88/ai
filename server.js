@@ -267,6 +267,7 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify) {
     }
     const m = jr.choices[0].message; totalTokens += jr.usage?.total_tokens || 0;
     msgs.push(m);
+    if (m.content && m.tool_calls && m.tool_calls.length) onStep && onStep('💭 ' + m.content); // พ่นเหตุผลกลางทางให้ user เห็นสด
     if (!m.tool_calls || !m.tool_calls.length) return { reply: m.content || '(ไม่มีข้อความ)', actions: log.items, truncated: false, tokens: totalTokens };
     for (const tc of m.tool_calls) {
       const sig = tc.function.name + ':' + tc.function.arguments;
@@ -416,7 +417,7 @@ const server = http.createServer(async (req, res) => {
     const canEditS = rec => rec.owner === me.id || (rec.shared || []).some(s => s.id === me.id && s.canEdit);
     if (p === '/api/sessions' && req.method === 'GET') {
       const all = db.listSessions();
-      const list = all.filter(canSee).map(d => ({ id: d.id, title: d.title, updated: d.updated, mine: d.owner === me.id, canEdit: canEditS(d) })).sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
+      const list = all.filter(canSee).map(d => ({ id: d.id, title: d.title, updated: d.updated, mine: d.owner === me.id, canEdit: canEditS(d), pinned: !!d.pinned, category: d.category || '' })).sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
       return J(res, 200, list);
     }
     if (p === '/api/sessions' && req.method === 'POST') {
@@ -425,8 +426,17 @@ const server = http.createServer(async (req, res) => {
       let owner = me.id, shared = [];
       const ex = db.getSession(id);
       if (ex) { if (!canEditS(ex)) return J(res, 403, { error: 'ไม่มีสิทธิ์แก้ session นี้' }); owner = ex.owner; shared = ex.shared || []; }
-      db.putSession({ id, owner, shared, title: (b.title || 'แชทใหม่').slice(0, 60), messages: b.messages || [], thoughts: b.thoughts || {}, root: b.root || DEFAULT_ROOT, updated: new Date().toISOString() });
+      db.putSession({ id, owner, shared, title: (b.title || 'แชทใหม่').slice(0, 60), messages: b.messages || [], thoughts: b.thoughts || {}, root: b.root || DEFAULT_ROOT, pinned: ex ? !!ex.pinned : false, category: ex ? (ex.category || '') : '', updated: new Date().toISOString() });
       return J(res, 200, { id });
+    }
+    // ปักหมุด / จัดหมวดหมู่ session
+    if ((m = p.match(/^\/api\/sessions\/([\w-]+)\/meta$/)) && req.method === 'POST') {
+      const rec = db.getSession(m[1]); if (!rec) return J(res, 404, { error: 'not found' });
+      if (!canEditS(rec)) return J(res, 403, { error: 'ไม่มีสิทธิ์' });
+      const b = JSON.parse(await readBody(req) || '{}');
+      if (b.pinned != null) rec.pinned = !!b.pinned;
+      if (b.category != null) rec.category = String(b.category).slice(0, 40);
+      db.putSession(rec); return J(res, 200, { ok: true });
     }
     if ((m = p.match(/^\/api\/sessions\/([\w-]+)\/share$/)) && req.method === 'POST') {
       const rec = db.getSession(m[1]); if (!rec) return J(res, 404, { error: 'not found' });
