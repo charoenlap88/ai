@@ -92,20 +92,28 @@
   .mbody{flex:1;overflow:auto;padding:16px}
   .setrow{margin-bottom:18px}
   .setopts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:7px}
+  .extcard{background:#0f1117;border:1px solid #2a2f42;border-radius:14px;padding:18px;margin-bottom:14px}
+  .switch{position:relative;display:inline-block;width:42px;height:24px;cursor:pointer;flex:none}
+  .switch input{opacity:0;width:0;height:0}
+  .switch .track{position:absolute;inset:0;background:#2a2f42;border-radius:24px;transition:.2s}
+  .switch .track:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+  .switch input:checked+.track{background:var(--pri)}
+  .switch input:checked+.track:before{transform:translateX(18px)}
   .dl{flex:1;overflow-y:auto;padding:8px}
   .dl div{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
   .dl div:hover{background:#22283a}
   .modal label{display:block;font-size:12px;color:#9aa0c0;margin:10px 0 5px;font-weight:500}
-  .modal input:not([type=checkbox]),.modal textarea{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:9px 11px;font:inherit;font-size:13.5px;color-scheme:dark;transition:border-color .15s}
+  .modal input:not([type=checkbox]),.modal textarea{width:100%;background:#12141d;border:1px solid #2f3547;border-radius:11px;color:#fff;padding:11px 13px;font:inherit;font-size:13.5px;color-scheme:dark;transition:border-color .15s,box-shadow .15s}
+  .modal input::placeholder{color:#5a6078}
   .modal input[type=checkbox]{width:auto;color-scheme:dark}
-  .modal input:focus,.modal textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(77,107,255,.18)}
+  .modal input:focus,.modal textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px color-mix(in srgb,var(--pri) 20%,transparent)}
   .chips2{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
   .chips2 button{background:#20213c;border:1px solid #313850;color:#c7c7ea;font-size:12px;padding:5px 11px;border-radius:20px;cursor:pointer}
   .chips2 button:hover{border-color:var(--pri);color:#fff}
   #loginView{position:fixed;inset:0;background:#0f1117;display:flex;align-items:center;justify-content:center;z-index:200}
   #loginView .box{background:#1a1b2e;border:1px solid #2c2d44;border-radius:16px;padding:26px;width:340px}
-  #loginView input{width:100%;background:#0f1117;border:1px solid #2a2f42;border-radius:9px;color:#fff;padding:10px 12px;font:inherit;margin-bottom:8px;color-scheme:dark}
-  #loginView input:focus{outline:none;border-color:var(--pri)}
+  #loginView input{width:100%;background:#12141d;border:1px solid #2f3547;border-radius:11px;color:#fff;padding:12px 14px;font:inherit;margin-bottom:9px;color-scheme:dark;transition:border-color .15s,box-shadow .15s}
+  #loginView input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px color-mix(in srgb,var(--pri) 20%,transparent)}
   .qbar{height:5px;background:#0f1117;border-radius:3px;overflow:hidden;margin-top:3px}
   .qbar>i{display:block;height:100%;background:var(--pri)}
   .mic{width:52px;height:52px;border-radius:50%;border:none;background:#4d6bff;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s}
@@ -325,7 +333,7 @@ let history = [], currentId = null, browsePath = '', defaultRoot = '', currentRo
 // ---- root / folder ----
 async function loadRoot(){ const d = await fetch('/api/root').then(r=>r.json()); defaultRoot=d.root; if(!currentRoot) currentRoot=d.root; noKey=!d.hasKey; renderRoot(); }
 function renderRoot(){ $('rootbox').innerHTML = esc(currentRoot) + (noKey?' <span style="color:#ff8a8a">(ไม่มี key)</span>':''); }
-async function openBrowse(path){ const d = await fetch('/api/browse?path='+encodeURIComponent(path||'')).then(r=>r.json()); if(d.error) return alert(d.error); browsePath=d.path; $('curPath').innerHTML=ic('folder',14)+' '+esc(d.path); $('dirList').innerHTML='<div onclick="openBrowse(\''+d.parent.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+ic('folder',14)+' .. (ขึ้นบน)</div>'+d.dirs.map(n=>`<div onclick="openBrowse('${(d.path+'/'+n).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${ic('folder',14)} ${esc(n)}</div>`).join(''); $('ov').classList.add('on'); }
+async function openBrowse(path){ const d = await fetch('/api/browse?path='+encodeURIComponent(path||'')).then(r=>r.json()); if(d.error) return alertBox(d.error); browsePath=d.path; $('curPath').innerHTML=ic('folder',14)+' '+esc(d.path); $('dirList').innerHTML='<div onclick="openBrowse(\''+d.parent.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+ic('folder',14)+' .. (ขึ้นบน)</div>'+d.dirs.map(n=>`<div onclick="openBrowse('${(d.path+'/'+n).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${ic('folder',14)} ${esc(n)}</div>`).join(''); $('ov').classList.add('on'); }
 function closeBrowse(){ $('ov').classList.remove('on'); }
 function useFolder(){ currentRoot=browsePath; renderRoot(); closeBrowse(); } // ตั้ง root ของ session ปัจจุบัน (ไม่ global)
 
@@ -348,16 +356,16 @@ function renderSItem(s){ return `<div class="sitem ${s.id===currentId?'active':'
 async function togglePin(id,pinned){ await fetch('/api/sessions/'+id+'/meta',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pinned:!pinned})}); loadSessions(); }
 async function setCategory(id){ const cur=(_sessions.find(s=>s.id===id)||{}).category||'';
   const cats=[...new Set(_sessions.map(s=>s.category).filter(Boolean))];
-  const c=prompt('ใส่ชื่อหมวดหมู่ (เว้นว่าง=เอาออก)'+(cats.length?'\nที่มีอยู่: '+cats.join(', '):''), cur); if(c===null)return;
+  const c=await promptBox('ใส่ชื่อหมวดหมู่ (เว้นว่าง=เอาออก)'+(cats.length?'\nที่มีอยู่: '+cats.join(', '):''), cur, 'หมวดหมู่'); if(c===null)return;
   await fetch('/api/sessions/'+id+'/meta',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({category:c.trim()})}); loadSessions(); }
 async function shareSession(id){
-  const email=prompt('แชร์ session ให้ (อีเมลผู้ใช้ในระบบ):'); if(!email)return;
-  const canEdit=confirm('ให้สิทธิ์แก้ไขด้วยไหม?\n\nOK = แก้ไขได้ · Cancel = ดูอย่างเดียว');
+  const email=await promptBox('แชร์ session ให้ (อีเมลผู้ใช้ในระบบ):','','แชร์แชท'); if(!email)return;
+  const canEdit=await confirmBox('ให้สิทธิ์แก้ไขด้วยไหม?\n\nตกลง = แก้ไขได้ · ยกเลิก = ดูอย่างเดียว','สิทธิ์การแชร์');
   const d=await fetch('/api/sessions/'+id+'/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,canEdit})}).then(r=>r.json());
-  alert(d.error?('❌ '+d.error):('✅ แชร์ให้ '+email+' แล้ว ('+(canEdit?'แก้ไขได้':'ดูอย่างเดียว')+')'));
+  alertBox(d.error?('แชร์ไม่สำเร็จ: '+d.error):('แชร์ให้ '+email+' แล้ว ('+(canEdit?'แก้ไขได้':'ดูอย่างเดียว')+')'));
 }
 async function loadSession(id){ toggleSide(false); const d = await fetch('/api/sessions/'+id).then(r=>r.json()); history = d.messages||[]; thoughts = d.thoughts||{}; currentId = id; currentRoot = d.root||defaultRoot; renderRoot(); renderHistory(); loadSessions(); }
-async function delSession(id){ if(!confirm('ลบแชทนี้?'))return; await fetch('/api/sessions/'+id,{method:'DELETE'}); if(id===currentId) newChat(); loadSessions(); }
+async function delSession(id){ if(!await confirmBox('ลบแชทนี้?','ลบแชท'))return; await fetch('/api/sessions/'+id,{method:'DELETE'}); if(id===currentId) newChat(); loadSessions(); }
 function newChat(){ toggleSide(false); history=[]; thoughts={}; currentId=null; currentRoot=defaultRoot; renderRoot(); $('chat').innerHTML='<div class="hint">แชทใหม่ — พิมพ์สั่งงานได้เลย</div>'; loadSessions(); }
 async function saveSession(){ const title = (history.find(m=>m.role==='user')||{}).content || 'แชทใหม่'; const d = await fetch('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:currentId,title,messages:history,thoughts,root:currentRoot})}).then(r=>r.json()); currentId = d.id; loadSessions(); }
 
@@ -462,7 +470,7 @@ async function loadSchedList(){
   </div>`).join('') : '<div style="color:#8a90a6;font-size:12px">ยังไม่มีงานตามเวลา</div>';
 }
 async function runSchedNow(id){ $('sc_msg').style.color='#8a90a6'; $('sc_msg').textContent='สั่งรันแล้ว — ดูผลใน ประวัติ'; await fetch('/api/schedules/'+id+'/run',{method:'POST'}); setTimeout(()=>{loadSchedList();loadSessions();},2000); }
-async function delSched(id){ if(!confirm('ลบงานนี้?'))return; await fetch('/api/schedules/'+id,{method:'DELETE'}); loadSchedList(); }
+async function delSched(id){ if(!await confirmBox('ลบงานนี้?','ลบงานตามเวลา'))return; await fetch('/api/schedules/'+id,{method:'DELETE'}); loadSchedList(); }
 
 // ---- Auth / Admin (เฟส 1) ----
 function toggleReg(){ regMode=!regMode; $('login_sub').textContent=regMode?'สมัครสมาชิก (ใช้ได้ทันที)':'เข้าสู่ระบบ'; $('lg_btn').textContent=regMode?'สมัคร':'เข้าสู่ระบบ'; $('lg_toggle_txt').textContent=regMode?'มีบัญชีแล้ว?':'ยังไม่มีบัญชี?'; $('lg_toggle').textContent=regMode?'เข้าสู่ระบบ':'สมัครสมาชิก'; $('lg_msg').textContent=''; }
@@ -542,32 +550,47 @@ function setSetting(k,v){ settings[k]=v; localStorage.setItem('dssettings',JSON.
 function setTheme(pri,bg){ settings.pri=pri; settings.bg=bg; localStorage.setItem('dssettings',JSON.stringify(settings)); applySettings(settings); renderSettings(); }
 function resetSettings(){ settings={}; localStorage.removeItem('dssettings'); applySettings(settings); renderSettings(); }
 function openSettings(){ renderSettings(); $('ovSettings').classList.add('on'); }
+// ---- modal dialog แทน alert/prompt/confirm ----
+function dlg({title,bodyHtml,buttons,input}){ return new Promise(resolve=>{
+  const ov=document.createElement('div'); ov.className='overlay on'; ov.style.zIndex='400';
+  ov.innerHTML=`<div class="modal" style="width:400px;max-width:94vw"><h3>${esc(title||'')}</h3><div class="mbody">${bodyHtml||''}</div><div class="mfoot"></div></div>`;
+  const done=v=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); resolve(v); };
+  const inp=ov.querySelector('#_dlgi'), foot=ov.querySelector('.mfoot');
+  buttons.forEach(b=>{ const btn=document.createElement('button'); btn.className='btn '+(b.pri?'pri':''); btn.textContent=b.label; btn.onclick=()=>done(b.value!==undefined?b.value:(inp?inp.value:true)); foot.appendChild(btn); });
+  ov.addEventListener('click',e=>{ if(e.target===ov) done(input?null:false); });
+  document.body.appendChild(ov);
+  if(inp){ inp.focus(); inp.select&&inp.select(); inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); done(inp.value); } else if(e.key==='Escape') done(null); }); }
+});}
+function alertBox(msg,title){ return dlg({title:title||'แจ้งเตือน',bodyHtml:`<div style="font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere">${esc(msg)}</div>`,buttons:[{label:'ตกลง',pri:true,value:true}]}); }
+function confirmBox(msg,title){ return dlg({title:title||'ยืนยัน',bodyHtml:`<div style="font-size:14px;line-height:1.55;white-space:pre-wrap">${esc(msg)}</div>`,buttons:[{label:'ยกเลิก',value:false},{label:'ตกลง',pri:true,value:true}]}); }
+function promptBox(msg,def,title,opts){ opts=opts||{}; return dlg({title:title||'กรอกข้อมูล',input:true,bodyHtml:`<div style="font-size:13px;color:#8a90a6;margin-bottom:9px;white-space:pre-wrap">${esc(msg)}</div><input id="_dlgi" ${opts.password?'type="password"':''} value="${esc(def||'')}" placeholder="${esc(opts.ph||'')}" style="width:100%">`,buttons:[{label:'ยกเลิก',value:null},{label:'ตกลง',pri:true}]}); }
+let _extMeta={};
 async function openExt(){
-  const d=await fetch('/api/ext').then(r=>r.json()).catch(()=>({jira:{}})); const j=d.jira||{};
-  $('extBody').innerHTML=`
-    <div style="background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:10px;font-weight:600"><span style="width:32px;height:32px;border-radius:8px;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">Jira</span> Jira</div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="jira_en" ${j.enabled?'checked':''}> เปิดใช้งาน</label>
+  const d=await fetch('/api/ext').then(r=>r.json()).catch(()=>({})); _extMeta=d;
+  $('extBody').innerHTML=Object.keys(d).map(k=>{ const x=d[k]; const c=x.meta.color;
+    const fields=x.fields.map(f=>`<div class="setrow"><div class="lbl">${esc(f.label)}${f.secret&&x.has[f.key]?' <span style="color:#7fd0a0;font-weight:400">(ตั้งไว้แล้ว)</span>':''}</div>
+        <input id="fld_${k}_${f.key}" ${f.secret?'type="password"':''} value="${esc(x.values[f.key]||'')}" placeholder="${esc(f.secret&&x.has[f.key]?'••••••••••':(f.ph||''))}">
+        ${f.hint?`<div style="font-size:11px;color:#8a90a6;margin-top:5px">${f.hint.replace(/(https?:\/\/[^\s]+)/,'<a href="$1" target="_blank" style="color:#8ab4ff">$1</a>')}</div>`:''}</div>`).join('');
+    return `<div class="extcard">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:11px;font-weight:600;font-size:15px"><span style="width:34px;height:34px;border-radius:9px;background:${c};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${esc(x.meta.name.slice(0,2))}</span> ${esc(x.meta.name)}</div>
+        <label class="switch"><input type="checkbox" id="en_${k}" ${x.enabled?'checked':''}><span class="track"></span></label>
       </div>
-      <div style="font-size:12px;color:#8a90a6;margin-bottom:14px">ให้ AI ค้นหา/ดู/สร้าง issue และคอมเมนต์ใน Jira ของคุณได้ (เช่น "หา issue ที่ค้างของฉัน", "สร้าง bug ใน PROJ")</div>
-      <div class="setrow"><div class="lbl">Jira URL</div><input id="jira_url" value="${esc(j.baseUrl||'')}" placeholder="https://yourcompany.atlassian.net"></div>
-      <div class="setrow"><div class="lbl">Email</div><input id="jira_email" value="${esc(j.email||'')}" placeholder="you@company.com"></div>
-      <div class="setrow"><div class="lbl">API Token ${j.hasToken?'<span style="color:#7fd0a0">(ตั้งไว้แล้ว — เว้นว่างถ้าไม่เปลี่ยน)</span>':''}</div><input id="jira_token" type="password" placeholder="${j.hasToken?'••••••••••':'วาง API token'}"></div>
-      <div style="font-size:11.5px;color:#8a90a6;margin:-4px 0 12px">สร้าง token: id.atlassian.com → Security → <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" style="color:#8ab4ff">Create API token</a></div>
-      <div style="display:flex;gap:8px"><button class="btn" onclick="testJira()">ทดสอบเชื่อมต่อ</button><button class="btn pri" onclick="saveJira()">บันทึก</button></div>
-      <div id="jira_msg" style="font-size:12.5px;margin-top:11px"></div>
+      <div style="font-size:12.5px;color:#8a90a6;margin:8px 0 14px">${esc(x.meta.desc)}</div>
+      ${fields}
+      <div style="display:flex;gap:8px;margin-top:6px"><button class="btn" onclick="testExt('${k}')">ทดสอบเชื่อมต่อ</button><button class="btn pri" onclick="saveExt('${k}')">บันทึก</button></div>
+      <div id="msg_${k}" style="font-size:12.5px;margin-top:11px"></div>
     </div>`;
+  }).join('');
   $('ovExt').classList.add('on');
 }
-async function saveJira(){ const body={enabled:$('jira_en').checked,baseUrl:$('jira_url').value.trim(),email:$('jira_email').value.trim()}; const tk=$('jira_token').value.trim(); if(tk) body.token=tk;
-  const m=$('jira_msg'); m.style.color='#8a90a6'; m.textContent='กำลังบันทึก...';
-  const d=await fetch('/api/ext/jira',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  if(d.error){ m.style.color='#ff8a8a'; m.textContent=d.error; } else { m.style.color='#7fd0a0'; m.textContent='✓ บันทึกแล้ว'+(d.enabled?' · เปิดใช้งาน (สั่ง AI ใช้ Jira ได้เลย)':' · ปิดอยู่'); }
+function _extBody(k,includeAll){ const body=includeAll?{enabled:$('en_'+k).checked}:{}; _extMeta[k].fields.forEach(f=>{ const v=$('fld_'+k+'_'+f.key).value.trim(); if(v) body[f.key]=v; }); return body; }
+async function saveExt(k){ const m=$('msg_'+k); m.style.color='#8a90a6'; m.textContent='กำลังบันทึก...';
+  const d=await fetch('/api/ext/'+k,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(_extBody(k,true))}).then(r=>r.json());
+  if(d.error){ m.style.color='#ff8a8a'; m.textContent=d.error; } else { m.style.color='#7fd0a0'; m.textContent='✓ บันทึกแล้ว'+(d.enabled?' · เปิดใช้งาน (สั่ง AI ใช้ได้เลย)':' · ปิดอยู่'); }
 }
-async function testJira(){ const body={baseUrl:$('jira_url').value.trim(),email:$('jira_email').value.trim()}; const tk=$('jira_token').value.trim(); if(tk) body.token=tk;
-  const m=$('jira_msg'); m.style.color='#8a90a6'; m.textContent='กำลังทดสอบ...';
-  const d=await fetch('/api/ext/jira/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+async function testExt(k){ const m=$('msg_'+k); m.style.color='#8a90a6'; m.textContent='กำลังทดสอบ...';
+  const d=await fetch('/api/ext/'+k+'/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(_extBody(k,false))}).then(r=>r.json());
   if(d.error){ m.style.color='#ff8a8a'; m.textContent='✕ '+d.error; } else { m.style.color='#7fd0a0'; m.textContent='✓ เชื่อมต่อสำเร็จ: '+((d.user&&d.user.displayName)||''); }
 }
 function renderSettings(){
@@ -677,17 +700,17 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
 }
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
 async function sendMsg(email){
-  const text = email ? prompt('ส่งข้อความหา '+email+':') : ($('bcastMsg')?$('bcastMsg').value.trim():'');
+  const text = email ? await promptBox('ส่งข้อความหา '+email+':','','ส่งข้อความ') : ($('bcastMsg')?$('bcastMsg').value.trim():'');
   if(!text) return;
   const d = await fetch('/api/broadcast',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,email})}).then(r=>r.json());
-  if(d.error){ alert(d.error); return; }
-  alert('ส่งแล้ว → '+(email||'ทุกคน')+' ('+d.sent+' การเชื่อมต่อออนไลน์)');
+  if(d.error){ alertBox(d.error); return; }
+  alertBox('ส่งแล้ว → '+(email||'ทุกคน')+' ('+d.sent+' การเชื่อมต่อออนไลน์)');
   if(!email && $('bcastMsg')) $('bcastMsg').value='';
 }
 async function resetPw(id,email){
-  const pw=prompt('ตั้งรหัสผ่านใหม่ให้ '+email+' (อย่างน้อย 4 ตัว):'); if(!pw) return;
+  const pw=await promptBox('ตั้งรหัสผ่านใหม่ให้ '+email+' (อย่างน้อย 4 ตัว):','','รีเซ็ตรหัสผ่าน',{password:true}); if(!pw) return;
   const d=await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw})}).then(r=>r.json());
-  alert(d.error ? d.error : ('ตั้งรหัสผ่านใหม่ให้ '+email+' แล้ว'));
+  alertBox(d.error ? d.error : ('ตั้งรหัสผ่านใหม่ให้ '+email+' แล้ว'));
 }
 
 initAuth();

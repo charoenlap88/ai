@@ -37,6 +37,12 @@ export async function run(name, args, cfg) {
   throw new Error('unknown jira tool ' + name);
 }
 
+export const meta = { name: 'Jira', color: '#2563eb', desc: 'ค้นหา/ดู/สร้าง issue และคอมเมนต์ใน Jira ของคุณ' };
+export const fields = [
+  { key: 'baseUrl', label: 'Jira URL', ph: 'https://yourcompany.atlassian.net' },
+  { key: 'email', label: 'Email', ph: 'you@company.com' },
+  { key: 'token', label: 'API Token', secret: true, ph: 'API token', hint: 'id.atlassian.com → Security → Create API token' },
+];
 export const TOOLS = [
   { type: 'function', function: { name: 'jira_search', description: 'ค้นหา Jira issue ด้วย JQL เช่น "assignee = currentUser() AND status != Done"', parameters: { type: 'object', properties: { jql: { type: 'string' }, max: { type: 'number' } }, required: ['jql'] } } },
   { type: 'function', function: { name: 'jira_get_issue', description: 'ดูรายละเอียด Jira issue จาก key เช่น PROJ-123', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } } },

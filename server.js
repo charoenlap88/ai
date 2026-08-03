@@ -11,6 +11,10 @@ import os from 'node:os';
 import * as db from './services/db.js';
 import * as office from './services/office.js';
 import * as jira from './services/jira.js';
+import * as github from './services/github.js';
+import * as slack from './services/slack.js';
+import * as trello from './services/trello.js';
+const EXTS = { jira, github, slack, trello }; // registry extensions
 const pexec = promisify(exec);
 // ponytail: โหลด .env เอง (node<20.6 ไม่มี process.loadEnvFile) — cwd ก่อน แล้ว fallback ที่โฟลเดอร์ไฟล์
 for (const _f of [path.resolve('.env'), fileURLToPath(new URL('.env', import.meta.url))]) {
@@ -117,9 +121,10 @@ async function extractText(name, buf) {
 }
 
 async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, ext) {
-  if (name.startsWith('jira_')) {
-    if (!ext || !ext.jira || !ext.jira.enabled) return 'ยังไม่ได้เปิด/ตั้งค่า extension Jira (ไปที่เมนู Extensions)';
-    try { return await jira.run(name, args, ext.jira); } catch (e) { return 'Jira error: ' + String(e.message || e).slice(0, 300); }
+  const ek = Object.keys(EXTS).find(k => EXTS[k].TOOLS.some(t => t.function.name === name));
+  if (ek) {
+    if (!ext || !ext[ek] || !ext[ek].enabled) return 'ยังไม่ได้เปิด/ตั้งค่า extension ' + EXTS[ek].meta.name + ' (ไปที่เมนู Extensions)';
+    try { return await EXTS[ek].run(name, args, ext[ek]); } catch (e) { return EXTS[ek].meta.name + ' error: ' + String(e.message || e).slice(0, 300); }
   }
   if (name === 'notify') { onNotify && onNotify(args.message || ''); return 'แจ้ง user แล้ว'; }
   if (name === 'generate_image') {
@@ -248,7 +253,7 @@ ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (�
 async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
-  const tools = (ext && ext.jira && ext.jira.enabled) ? [...TOOLS, ...jira.TOOLS] : TOOLS; // extension เปิด = เพิ่ม tool
+  let tools = TOOLS; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // extension เปิด = เพิ่ม tool
   const msgs = [{ role: 'system', content: sysPrompt(root) }, ...messages];
   const MAX = Number(process.env.MAX_ROUNDS) || 100; // ทำต่อเนื่องจนจบ (backstop กัน runaway)
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
@@ -410,29 +415,31 @@ const server = http.createServer(async (req, res) => {
       try { const text = await extractText(name, buf); return J(res, 200, { name, text: (text || '').slice(0, 120000) }); }
       catch (e) { return J(res, 500, { error: 'อ่านไฟล์ไม่สำเร็จ: ' + String(e.message || e).slice(0, 200) }); }
     }
-    // ---- Extensions (ต่อบริการภายนอก เช่น Jira) ----
+    // ---- Extensions (ต่อบริการภายนอก: Jira/GitHub/Slack/Trello) ----
     if (p === '/api/ext' && req.method === 'GET') {
-      const j = (me.ext && me.ext.jira) || {};
-      return J(res, 200, { jira: { enabled: !!j.enabled, baseUrl: j.baseUrl || '', email: j.email || '', hasToken: !!j.token } });
+      const out = {};
+      for (const k of Object.keys(EXTS)) {
+        const c = (me.ext && me.ext[k]) || {};
+        const values = {}; for (const f of EXTS[k].fields) values[f.key] = f.secret ? undefined : (c[f.key] || '');
+        const has = {}; for (const f of EXTS[k].fields) if (f.secret) has[f.key] = !!c[f.key];
+        out[k] = { meta: EXTS[k].meta, fields: EXTS[k].fields, enabled: !!c.enabled, values, has };
+      }
+      return J(res, 200, out);
     }
-    if (p === '/api/ext/jira' && req.method === 'POST') {
+    if ((m = p.match(/^\/api\/ext\/([a-z]+)$/)) && req.method === 'POST') {
+      const k = m[1]; if (!EXTS[k]) return J(res, 404, { error: 'ไม่มี extension นี้' });
       const b = JSON.parse(await readBody(req) || '{}');
       const users = loadUsers(); const u = users.find(x => x.id === me.id); if (!u) return J(res, 404, { error: 'not found' });
-      u.ext = u.ext || {}; const cur = u.ext.jira || {};
-      u.ext.jira = {
-        enabled: b.enabled != null ? !!b.enabled : !!cur.enabled,
-        baseUrl: b.baseUrl != null ? String(b.baseUrl).trim() : (cur.baseUrl || ''),
-        email: b.email != null ? String(b.email).trim() : (cur.email || ''),
-        token: b.token ? String(b.token) : (cur.token || ''), // token ว่าง = คงของเดิม (ไม่ล้าง)
-      };
-      saveUsers(users);
-      return J(res, 200, { ok: true, enabled: u.ext.jira.enabled, hasToken: !!u.ext.jira.token });
+      u.ext = u.ext || {}; const cur = u.ext[k] || {}; const next = { enabled: b.enabled != null ? !!b.enabled : !!cur.enabled };
+      for (const f of EXTS[k].fields) next[f.key] = (b[f.key] != null && String(b[f.key]).length) ? String(b[f.key]).trim() : (cur[f.key] || ''); // ค่าลับที่ว่าง = คงเดิม
+      u.ext[k] = next; saveUsers(users);
+      return J(res, 200, { ok: true, enabled: next.enabled });
     }
-    if (p === '/api/ext/jira/test' && req.method === 'POST') {
-      const b = JSON.parse(await readBody(req) || '{}');
-      const cur = (me.ext && me.ext.jira) || {};
-      const cfg = { baseUrl: b.baseUrl || cur.baseUrl, email: b.email || cur.email, token: b.token || cur.token };
-      try { const r = await jira.test(cfg); return J(res, 200, { ok: true, user: r }); }
+    if ((m = p.match(/^\/api\/ext\/([a-z]+)\/test$/)) && req.method === 'POST') {
+      const k = m[1]; if (!EXTS[k]) return J(res, 404, { error: 'ไม่มี extension นี้' });
+      const b = JSON.parse(await readBody(req) || '{}'); const cur = (me.ext && me.ext[k]) || {};
+      const cfg = { ...cur }; for (const f of EXTS[k].fields) if (b[f.key] != null && String(b[f.key]).length) cfg[f.key] = String(b[f.key]).trim();
+      try { const r = await EXTS[k].test(cfg); return J(res, 200, { ok: true, user: r }); }
       catch (e) { return J(res, 400, { error: String(e.message || e).slice(0, 300) }); }
     }
     // ---- โฟลเดอร์ ----
