@@ -162,7 +162,10 @@
     <span class="fb-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="fb-path" id="rootbox">...</span>
     <button class="fb-btn" onclick="openBrowse()">เปลี่ยนโฟลเดอร์</button>
   </div>
+  <div id="attachBar" style="display:none;padding:7px 16px;background:#141722;border-top:1px solid #262a38;font-size:12.5px;color:#8ab4ff"></div>
   <div class="foot">
+    <input type="file" id="fileInp" style="display:none" onchange="attachFile(this.files[0])" accept="image/*,.pdf,.docx,.txt,.csv,.md,.json,.js,.py,.ts,.html,.css,.xml,.log">
+    <button class="send" id="attachBtn" onclick="$('fileInp').click()" title="แนบไฟล์ (รูป/pdf/word/txt)" style="background:#1a1e2b;display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.2 20.3a5 5 0 0 1-7.1-7.1l9.2-9.2a3.3 3.3 0 0 1 4.7 4.7l-9.2 9.2a1.7 1.7 0 0 1-2.4-2.4l8.5-8.5"/></svg></button>
     <button class="send" id="modeBtn" onclick="toggleVoice()" title="สลับโหมดเสียง/พิมพ์" style="background:#1a1e2b;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg></button>
     <textarea id="inp" placeholder="สั่งงาน... (Enter ส่ง, Shift+Enter ขึ้นบรรทัด)"></textarea>
     <button class="send" id="sendBtn" onclick="send()">ส่ง</button>
@@ -340,11 +343,26 @@ function regenerate(){
   const last=history[history.length-1].content; history.pop();
   renderHistory(); $('inp').value=last; send();
 }
+let attached=null; // {name, text}
+async function attachFile(file){
+  if(!file) return;
+  const b=$('attachBar'); b.style.display='block'; b.textContent='กำลังอ่านไฟล์ '+file.name+' ...';
+  try{
+    const data=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
+    const d=await fetch('/api/upload',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:file.name,data})}).then(r=>r.json());
+    if(d.error){ b.textContent='❌ '+d.error; attached=null; }
+    else { attached={name:d.name,text:d.text}; b.innerHTML=ic('file',13)+' แนบ: '+esc(d.name)+' ('+d.text.length+' ตัวอักษร) <a onclick="clearAttach()" style="color:#ff9a9a;cursor:pointer;margin-left:8px">✕ ลบ</a>'; }
+  }catch(e){ b.textContent='❌ อัปโหลดไม่สำเร็จ'; attached=null; }
+  $('fileInp').value='';
+}
+function clearAttach(){ attached=null; $('attachBar').style.display='none'; }
 async function send(){
   if(genController) return;
-  const text=$('inp').value.trim(); if(!text) return;
+  const typed=$('inp').value.trim(); if(!typed && !attached) return;
   if($('chat').querySelector('.hint')) $('chat').innerHTML='';
-  $('inp').value=''; add('user', esc(text)); history.push({role:'user',content:text});
+  let display=typed, sendText=typed;
+  if(attached){ display=(typed?typed+'\n':'')+'📎 '+attached.name; sendText='[ไฟล์แนบ: '+attached.name+']\n'+attached.text+'\n\n'+(typed||'ช่วยอ่าน/สรุปเนื้อหาในไฟล์นี้ให้หน่อย'); clearAttach(); }
+  $('inp').value=''; add('user', esc(display)); history.push({role:'user',content:sendText});
   genController=new AbortController(); setSending(true);
   const thinking=add('acts','⏳ เริ่มทำงาน...');
   const steps=[]; let result=null;

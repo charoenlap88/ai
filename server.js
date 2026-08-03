@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import * as db from './services/db.js';
 import * as office from './services/office.js';
 const pexec = promisify(exec);
@@ -89,6 +90,29 @@ function stripHtml(h) {
 function blockedHost(url) {
   try { const h = new URL(url).hostname; return /^(localhost|0\.0\.0\.0|::1|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h); }
   catch { return true; }
+}
+
+// ---- อ่านไฟล์แนบ: รูป (OCR tesseract), pdf (pdftotext), docx (unzip), text ----
+const tmpFile = (ext) => path.join(os.tmpdir(), 'up-' + crypto.randomBytes(8).toString('hex') + (ext || ''));
+async function extractText(name, buf) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tif', 'tiff'].includes(ext)) {
+    const f = tmpFile('.' + ext); fs.writeFileSync(f, buf);
+    try { const { stdout } = await pexec(`tesseract ${JSON.stringify(f)} stdout -l tha+eng`, { maxBuffer: 8e6 }); return stdout; }
+    finally { fs.rmSync(f, { force: true }); }
+  }
+  if (ext === 'pdf') {
+    const f = tmpFile('.pdf'); fs.writeFileSync(f, buf);
+    try { const { stdout } = await pexec(`pdftotext ${JSON.stringify(f)} -`, { maxBuffer: 8e6 }); return stdout; }
+    finally { fs.rmSync(f, { force: true }); }
+  }
+  if (ext === 'docx') {
+    const f = tmpFile('.docx'); fs.writeFileSync(f, buf);
+    try { const { stdout } = await pexec(`unzip -p ${JSON.stringify(f)} word/document.xml`, { maxBuffer: 8e6 });
+      return stdout.replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim(); }
+    finally { fs.rmSync(f, { force: true }); }
+  }
+  return buf.toString('utf8'); // txt/csv/md/json/code
 }
 
 async function runTool(name, args, allowWrite, allowShell, log, root, onNotify) {
@@ -367,6 +391,16 @@ const server = http.createServer(async (req, res) => {
       let uid = null; if (b.email) { const t = loadUsers().find(x => x.email === b.email); if (!t) return J(res, 404, { error: 'ไม่พบผู้ใช้' }); uid = t.id; }
       const n = wsBroadcast({ type: 'admin_message', text: b.text, at: new Date().toISOString() }, uid);
       return J(res, 200, { ok: true, sent: n });
+    }
+    // ---- แนบไฟล์ให้ AI อ่าน (รูป OCR / pdf / docx / text) ----
+    if (p === '/api/upload' && req.method === 'POST') {
+      const b = JSON.parse(await readBody(req) || '{}');
+      if (!b.data) return J(res, 400, { error: 'ไม่มีไฟล์' });
+      const buf = Buffer.from(b.data, 'base64');
+      if (buf.length > 12 * 1024 * 1024) return J(res, 413, { error: 'ไฟล์ใหญ่เกิน 12MB' });
+      const name = (b.name || 'file').slice(0, 120);
+      try { const text = await extractText(name, buf); return J(res, 200, { name, text: (text || '').slice(0, 120000) }); }
+      catch (e) { return J(res, 500, { error: 'อ่านไฟล์ไม่สำเร็จ: ' + String(e.message || e).slice(0, 200) }); }
     }
     // ---- โฟลเดอร์ ----
     if (p === '/api/root' && req.method === 'GET') return J(res, 200, { root: DEFAULT_ROOT, hasKey: !!KEY }); // ค่าเริ่มต้น (แต่ละ session เลือกเอง)
