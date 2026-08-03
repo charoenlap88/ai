@@ -37,7 +37,7 @@ export async function run(name, args, cfg) {
   throw new Error('unknown jira tool ' + name);
 }
 
-export const meta = { name: 'Jira', color: '#2563eb', desc: 'ค้นหา/ดู/สร้าง issue และคอมเมนต์ใน Jira ของคุณ' };
+export const meta = { name: 'Jira', color: '#2563eb', category: 'จัดการงาน (Project)', desc: 'ค้นหา/ดู/สร้าง issue และคอมเมนต์ใน Jira ของคุณ' };
 export const fields = [
   { key: 'baseUrl', label: 'Jira URL', ph: 'https://yourcompany.atlassian.net' },
   { key: 'email', label: 'Email', ph: 'you@company.com' },

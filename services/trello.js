@@ -8,7 +8,7 @@ async function req(cfg, method, path, extra) {
   if (!r.ok) throw new Error('Trello ' + r.status + ': ' + String(typeof j === 'object' ? JSON.stringify(j) : j).slice(0, 200));
   return j;
 }
-export const meta = { name: 'Trello', color: '#0079bf', desc: 'ดูบอร์ด/การ์ด และสร้างการ์ดใหม่' };
+export const meta = { name: 'Trello', color: '#0079bf', category: 'จัดการงาน (Project)', desc: 'ดูบอร์ด/การ์ด และสร้างการ์ดใหม่' };
 export const fields = [
   { key: 'key', label: 'API Key', secret: true, ph: 'Trello API key' },
   { key: 'token', label: 'Token', secret: true, ph: 'Trello token', hint: 'trello.com/power-ups/admin → API key แล้วกด Token' },

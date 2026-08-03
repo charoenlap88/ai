@@ -398,6 +398,12 @@ const server = http.createServer(async (req, res) => {
       const list = [...wsClients.entries()].map(([uid, set]) => { const u = loadUsers().find(x => x.id === uid); return { email: u ? u.email : uid, conns: set.size }; });
       return J(res, 200, { users: wsClients.size, connections: list.reduce((a, b) => a + b.conns, 0), list });
     }
+    if (p === '/api/serverstat' && req.method === 'GET') {
+      if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
+      const total = os.totalmem(), free = os.freemem();
+      let disk = null; try { const s = fs.statfsSync('/'); const dt = s.blocks * s.bsize, dfree = s.bfree * s.bsize; disk = { total: dt, used: dt - dfree }; } catch {}
+      return J(res, 200, { ram: { total, used: total - free }, disk, load: os.loadavg()[0], cpus: os.cpus().length, uptime: os.uptime(), procRss: process.memoryUsage().rss, node: process.version });
+    }
     if (p === '/api/broadcast' && req.method === 'POST') {
       if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
       const b = JSON.parse(await readBody(req) || '{}'); if (!b.text) return J(res, 400, { error: 'ไม่มีข้อความ' });

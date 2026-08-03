@@ -92,7 +92,10 @@
   .mbody{flex:1;overflow:auto;padding:16px}
   .setrow{margin-bottom:18px}
   .setopts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:7px}
-  .extcard{background:#0f1117;border:1px solid #2a2f42;border-radius:14px;padding:18px;margin-bottom:14px}
+  .extcard{background:#0f1117;border:1px solid #2a2f42;border-radius:14px;padding:18px}
+  .extgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px;margin-bottom:16px}
+  .fchip{padding:6px 14px;border-radius:20px;border:1px solid #2a2f42;background:#0f1117;color:#cdd3e6;cursor:pointer;font:inherit;font-size:12.5px;transition:.15s}
+  .fchip.active{background:var(--pri);border-color:var(--pri);color:#fff}
   .switch{position:relative;display:inline-block;width:42px;height:24px;cursor:pointer;flex:none}
   .switch input{opacity:0;width:0;height:0}
   .switch .track{position:absolute;inset:0;background:#2a2f42;border-radius:24px;transition:.2s}
@@ -233,7 +236,7 @@
 </div>
 
 <div class="overlay" id="ovExt" onclick="if(event.target===this)$('ovExt').classList.remove('on')">
-  <div class="modal" style="width:480px">
+  <div class="modal" style="width:min(960px,95vw);height:88vh;max-height:88vh">
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3a1 1 0 0 0 1-1 2 2 0 1 1 4 0 1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1 2 2 0 1 1 0 4 1 1 0 0 0-1 1v3h-3a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H4v-3a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1z"/></svg> Extensions</h3>
     <div class="mbody" id="extBody"></div>
     <div class="mfoot"><button class="btn" onclick="$('ovExt').classList.remove('on')">ปิด</button></div>
@@ -564,26 +567,45 @@ function dlg({title,bodyHtml,buttons,input}){ return new Promise(resolve=>{
 function alertBox(msg,title){ return dlg({title:title||'แจ้งเตือน',bodyHtml:`<div style="font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere">${esc(msg)}</div>`,buttons:[{label:'ตกลง',pri:true,value:true}]}); }
 function confirmBox(msg,title){ return dlg({title:title||'ยืนยัน',bodyHtml:`<div style="font-size:14px;line-height:1.55;white-space:pre-wrap">${esc(msg)}</div>`,buttons:[{label:'ยกเลิก',value:false},{label:'ตกลง',pri:true,value:true}]}); }
 function promptBox(msg,def,title,opts){ opts=opts||{}; return dlg({title:title||'กรอกข้อมูล',input:true,bodyHtml:`<div style="font-size:13px;color:#8a90a6;margin-bottom:9px;white-space:pre-wrap">${esc(msg)}</div><input id="_dlgi" ${opts.password?'type="password"':''} value="${esc(def||'')}" placeholder="${esc(opts.ph||'')}" style="width:100%">`,buttons:[{label:'ยกเลิก',value:null},{label:'ตกลง',pri:true}]}); }
-let _extMeta={};
+let _extMeta={}, _extCat='';
 async function openExt(){
-  const d=await fetch('/api/ext').then(r=>r.json()).catch(()=>({})); _extMeta=d;
-  $('extBody').innerHTML=Object.keys(d).map(k=>{ const x=d[k]; const c=x.meta.color;
-    const fields=x.fields.map(f=>`<div class="setrow"><div class="lbl">${esc(f.label)}${f.secret&&x.has[f.key]?' <span style="color:#7fd0a0;font-weight:400">(ตั้งไว้แล้ว)</span>':''}</div>
-        <input id="fld_${k}_${f.key}" ${f.secret?'type="password"':''} value="${esc(x.values[f.key]||'')}" placeholder="${esc(f.secret&&x.has[f.key]?'••••••••••':(f.ph||''))}">
-        ${f.hint?`<div style="font-size:11px;color:#8a90a6;margin-top:5px">${f.hint.replace(/(https?:\/\/[^\s]+)/,'<a href="$1" target="_blank" style="color:#8ab4ff">$1</a>')}</div>`:''}</div>`).join('');
-    return `<div class="extcard">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:11px;font-weight:600;font-size:15px"><span style="width:34px;height:34px;border-radius:9px;background:${c};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${esc(x.meta.name.slice(0,2))}</span> ${esc(x.meta.name)}</div>
-        <label class="switch"><input type="checkbox" id="en_${k}" ${x.enabled?'checked':''}><span class="track"></span></label>
+  _extMeta=await fetch('/api/ext').then(r=>r.json()).catch(()=>({})); _extCat='';
+  const cats=[...new Set(Object.values(_extMeta).map(x=>x.meta.category||'อื่นๆ'))];
+  $('extBody').innerHTML=`
+    <div style="position:sticky;top:-16px;background:#171a24;padding:2px 0 12px;z-index:3;margin:-4px 0 0">
+      <input id="extSearch" placeholder="ค้นหา extension..." oninput="renderExtList()" style="width:100%;margin-bottom:11px">
+      <div class="setopts" id="extChips">
+        <button class="fchip active" data-c="" onclick="pickExtCat('')">ทั้งหมด (${Object.keys(_extMeta).length})</button>
+        ${cats.map(c=>`<button class="fchip" data-c="${esc(c)}" onclick="pickExtCat('${esc(c)}')">${esc(c)}</button>`).join('')}
       </div>
-      <div style="font-size:12.5px;color:#8a90a6;margin:8px 0 14px">${esc(x.meta.desc)}</div>
-      ${fields}
-      <div style="display:flex;gap:8px;margin-top:6px"><button class="btn" onclick="testExt('${k}')">ทดสอบเชื่อมต่อ</button><button class="btn pri" onclick="saveExt('${k}')">บันทึก</button></div>
-      <div id="msg_${k}" style="font-size:12.5px;margin-top:11px"></div>
-    </div>`;
-  }).join('');
-  $('ovExt').classList.add('on');
+    </div>
+    <div id="extCards"></div>`;
+  renderExtList(); $('ovExt').classList.add('on');
 }
+function pickExtCat(c){ _extCat=c; [...document.querySelectorAll('#extChips .fchip')].forEach(b=>b.classList.toggle('active',b.dataset.c===c)); renderExtList(); }
+function renderExtList(){
+  const q=($('extSearch')?$('extSearch').value.trim().toLowerCase():'');
+  const keys=Object.keys(_extMeta).filter(k=>{ const x=_extMeta[k], cat=x.meta.category||'อื่นๆ';
+    if(_extCat && cat!==_extCat) return false;
+    if(q && !((x.meta.name+' '+x.meta.desc).toLowerCase().includes(q))) return false; return true; });
+  const groups={}; keys.forEach(k=>{ const c=_extMeta[k].meta.category||'อื่นๆ'; (groups[c]=groups[c]||[]).push(k); });
+  let html=''; Object.keys(groups).sort().forEach(c=>{ html+=`<div class="catlbl" style="padding:2px 2px 8px">${esc(c)}</div><div class="extgrid">`+groups[c].map(extCard).join('')+'</div>'; });
+  $('extCards').innerHTML=html||'<div class="hint" style="padding:30px">ไม่พบ extension</div>';
+}
+function extCard(k){ const x=_extMeta[k], c=x.meta.color;
+  const fields=x.fields.map(f=>`<div class="setrow"><div class="lbl">${esc(f.label)}${f.secret&&x.has[f.key]?' <span style="color:#7fd0a0;font-weight:400">(ตั้งไว้แล้ว)</span>':''}</div>
+      <input id="fld_${k}_${f.key}" ${f.secret?'type="password"':''} value="${esc(x.values[f.key]||'')}" placeholder="${esc(f.secret&&x.has[f.key]?'••••••••••':(f.ph||''))}">
+      ${f.hint?`<div style="font-size:11px;color:#8a90a6;margin-top:5px">${f.hint.replace(/(https?:\/\/[^\s]+)/,'<a href="$1" target="_blank" style="color:#8ab4ff">$1</a>')}</div>`:''}</div>`).join('');
+  return `<div class="extcard">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:11px;font-weight:600;font-size:15px"><span style="width:34px;height:34px;border-radius:9px;background:${c};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${esc(x.meta.name.slice(0,2))}</span> ${esc(x.meta.name)}</div>
+      <label class="switch"><input type="checkbox" id="en_${k}" ${x.enabled?'checked':''}><span class="track"></span></label>
+    </div>
+    <div style="font-size:12.5px;color:#8a90a6;margin:8px 0 14px">${esc(x.meta.desc)}</div>
+    ${fields}
+    <div style="display:flex;gap:8px;margin-top:6px"><button class="btn" onclick="testExt('${k}')">ทดสอบเชื่อมต่อ</button><button class="btn pri" onclick="saveExt('${k}')">บันทึก</button></div>
+    <div id="msg_${k}" style="font-size:12.5px;margin-top:11px"></div>
+  </div>`; }
 function _extBody(k,includeAll){ const body=includeAll?{enabled:$('en_'+k).checked}:{}; _extMeta[k].fields.forEach(f=>{ const v=$('fld_'+k+'_'+f.key).value.trim(); if(v) body[f.key]=v; }); return body; }
 async function saveExt(k){ const m=$('msg_'+k); m.style.color='#8a90a6'; m.textContent='กำลังบันทึก...';
   const d=await fetch('/api/ext/'+k,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(_extBody(k,true))}).then(r=>r.json());
@@ -669,15 +691,24 @@ function openProfile(){
 }
 async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetch('/api/users').then(r=>r.json());
   const on=await fetch('/api/online').then(r=>r.json()).catch(()=>({users:0,connections:0}));
+  const st=await fetch('/api/serverstat').then(r=>r.json()).catch(()=>null);
   const totUsed=a.reduce((s,x)=>s+(x.used||0),0), unlimited=a.filter(x=>!(x.quota>0)).length;
   const totQuota=a.reduce((s,x)=>s+(x.quota>0?x.quota:0),0);
   const card=(l,v,sub)=>`<div style="background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px"><div class="lbl">${l}</div><div style="font-size:20px;font-weight:700;margin-top:2px">${v}</div>${sub?`<div class="lbl" style="margin-top:2px">${sub}</div>`:''}</div>`;
+  const gb=n=>(n/1073741824).toFixed(1)+' GB';
+  const bar=(used,total,label)=>{ const pct=total?Math.round(used/total*100):0, col=pct>85?'#ef4444':pct>65?'#f59e0b':'#10b981';
+    return `<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#8a90a6;margin-bottom:4px"><span>${label}</span><span>${gb(used)} / ${gb(total)} · ${pct}%</span></div><div style="height:10px;background:#12141d;border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col};transition:.4s"></div></div></div>`; };
+  const srv = st ? `<div style="background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:14px;margin-bottom:14px">
+      <div class="lbl" style="margin-bottom:11px">🖥️ สถานะ server · CPU load ${st.load.toFixed(2)}/${st.cpus} core · uptime ${Math.floor(st.uptime/3600)} ชม. · node ${st.node}</div>
+      ${bar(st.ram.used,st.ram.total,'RAM')}${st.disk?bar(st.disk.used,st.disk.total,'Disk (/)'):''}
+    </div>` : '';
   $('userList').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:12px">
       ${card('ผู้ใช้ทั้งหมด',a.length)}
       ${card('🟢 ออนไลน์ตอนนี้',on.users,on.connections+' การเชื่อมต่อ')}
       ${card('Token ใช้ไปรวม',fmtN(totUsed))}
       ${card('Quota รวม (จำกัด)',fmtN(totQuota),'+ '+unlimited+' คนไม่จำกัด')}
     </div>
+    ${srv}
     <div style="background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px;margin-bottom:14px">
       <div class="lbl" style="margin-bottom:7px">ส่งข้อความหาผู้ใช้ (realtime)</div>
       <div style="display:flex;gap:8px">

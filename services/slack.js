@@ -9,7 +9,7 @@ async function api(cfg, method, body) {
   if (!j.ok) throw new Error('Slack: ' + (j.error || 'unknown'));
   return j;
 }
-export const meta = { name: 'Slack', color: '#4a154b', desc: 'ส่งข้อความ + ดูช่องใน Slack' };
+export const meta = { name: 'Slack', color: '#4a154b', category: 'สื่อสาร (Chat)', desc: 'ส่งข้อความ + ดูช่องใน Slack' };
 export const fields = [{ key: 'token', label: 'Bot User OAuth Token', secret: true, ph: 'xoxb-...', hint: 'api.slack.com/apps → OAuth & Permissions (scope: chat:write, channels:read)' }];
 export async function test(cfg) { const j = await api(cfg, 'auth.test'); return { displayName: j.user + ' @ ' + j.team }; }
 export async function run(name, args, cfg) {

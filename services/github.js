@@ -9,7 +9,7 @@ async function req(cfg, method, path, body) {
   if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + String(typeof j === 'object' ? (j.message || JSON.stringify(j)) : j).slice(0, 300));
   return j;
 }
-export const meta = { name: 'GitHub', color: '#24292f', desc: 'ค้น/ดู/สร้าง issue + คอมเมนต์ ในรีโปของคุณ' };
+export const meta = { name: 'GitHub', color: '#24292f', category: 'พัฒนา/โค้ด (Dev)', desc: 'ค้น/ดู/สร้าง issue + คอมเมนต์ ในรีโปของคุณ' };
 export const fields = [{ key: 'token', label: 'Personal Access Token', secret: true, ph: 'ghp_...', hint: 'github.com → Settings → Developer settings → Personal access tokens (scope: repo)' }];
 export async function test(cfg) { const u = await req(cfg, 'GET', '/user'); return { displayName: u.login }; }
 export async function run(name, args, cfg) {
