@@ -170,6 +170,7 @@
   <header style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <button class="hamb" onclick="toggleSide()" aria-label="เมนู"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
     <span>AI Agent</span>
+    <button id="agentChip" onclick="openAgents()" title="เลือก/จัดการ Agent" style="background:#1a1e2b;border:1px solid #2a2f42;color:#cdd3e6;font-size:12.5px;padding:5px 11px;border-radius:20px;cursor:pointer;font-weight:400">🎭 ทั่วไป ▾</button>
     <span class="dlwrap" style="display:flex;gap:8px;align-items:center;margin-left:auto">
       <span class="dllabel" style="font-size:12px;color:#8a90a6">โหลดลงเครื่อง:</span>
       <a href="/downloads/AI-Agent-win-setup.exe" style="text-decoration:none;background:#1a1e2b;border:1px solid #2a2f42;color:#cdd3e6;font-size:12.5px;padding:6px 12px;border-radius:8px;white-space:nowrap"> Windows</a>
@@ -264,6 +265,14 @@
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> ตั้งค่า</h3>
     <div class="mbody" id="setBody"></div>
     <div class="mfoot"><button class="btn pri" style="flex:1" onclick="$('ovSettings').classList.remove('on')">เสร็จ</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovAgents" onclick="if(event.target===this)$('ovAgents').classList.remove('on')">
+  <div class="modal" style="width:560px;max-height:84vh">
+    <h3 style="display:flex;align-items:center;gap:8px">🎭 Agents (บทบาทสำเร็จรูป)</h3>
+    <div class="mbody" id="agentsBody"></div>
+    <div class="mfoot"><button class="btn pri" onclick="$('ovAgents').classList.remove('on')">ปิด</button></div>
   </div>
 </div>
 
@@ -451,7 +460,7 @@ async function send(){
   const thinking=add('acts','⏳ เริ่มทำงาน...');
   const steps=[]; let result=null;
   try{
-    const resp=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:history,allowWrite:$('allowWrite').checked,allowShell:$('allowShell').checked,root:currentRoot}),signal:genController.signal});
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:history,allowWrite:$('allowWrite').checked,allowShell:$('allowShell').checked,root:currentRoot,agentId:currentAgent?currentAgent.id:undefined}),signal:genController.signal});
     const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
     for(;;){
       const {value,done}=await reader.read(); if(done)break;
@@ -666,7 +675,7 @@ function renderSettings(){
 function enterApp(){ $('loginView').style.display='none'; renderUser(); loadRoot(); loadSessions();
   const admin = me.role==='admin';
   for(const id of ['warnBar','ctrlBar','folderBar']) $(id).style.display = admin?'':'none'; // เครื่องมือแก้ไฟล์/โฟลเดอร์ = admin เท่านั้น
-  connectWS(); refreshTasks();
+  connectWS(); refreshTasks(); renderAgentChip();
 }
 let ws=null;
 function connectWS(){
@@ -791,6 +800,34 @@ async function resetPw(id,email){
   alertBox(d.error ? d.error : ('ตั้งรหัสผ่านใหม่ให้ '+email+' แล้ว'));
 }
 
+// ---- Saved Agents ----
+let currentAgent=JSON.parse(localStorage.getItem('dsagent')||'null'), _agents=[];
+function renderAgentChip(){ const b=$('agentChip'); if(b) b.innerHTML=(currentAgent?esc(currentAgent.emoji||'🤖')+' '+esc(currentAgent.name):'🎭 ทั่วไป')+' ▾'; }
+async function openAgents(){ _agents=await fetch('/api/agents').then(r=>r.json()).catch(()=>[]); renderAgents(); $('ovAgents').classList.add('on'); }
+function renderAgents(){ $('agentsBody').innerHTML=`
+  <div style="background:#0f1117;border:1px solid #2a2f42;border-radius:12px;padding:15px;margin-bottom:14px">
+    <div class="lbl" style="margin-bottom:9px">สร้าง / แก้ Agent</div>
+    <input type="hidden" id="ag_id">
+    <div style="display:flex;gap:8px;margin-bottom:8px"><input id="ag_emoji" placeholder="🤖" style="width:64px;text-align:center;font-size:18px"><input id="ag_name" placeholder="ชื่อ เช่น นักเขียนโค้ด"></div>
+    <textarea id="ag_instr" placeholder="บทบาท/สไตล์ เช่น: คุณเป็นนักเขียนโค้ด Python สาย clean code ตอบสั้น มีตัวอย่างเสมอ" style="min-height:92px"></textarea>
+    <div style="display:flex;gap:8px;margin-top:9px"><button class="btn pri" onclick="saveAgent()">บันทึก</button><button class="btn" onclick="resetAgentForm()">ล้างฟอร์ม</button></div>
+  </div>
+  <div class="lbl">ของฉัน${currentAgent?' · ใช้อยู่: '+esc(currentAgent.name):''}</div>
+  ${_agents.length?_agents.map(a=>`<div class="prow">
+     <span style="flex:none;font-size:18px">${esc(a.emoji||'🤖')}</span>
+     <span style="flex:1;cursor:pointer;min-width:0" onclick="useAgentId('${a.id}')"><b>${esc(a.name)}</b>${currentAgent&&currentAgent.id===a.id?' <span style="color:#10b981;font-size:11px">● ใช้อยู่</span>':''}<br><span style="font-size:11.5px;color:#8a90a6;overflow-wrap:anywhere">${esc((a.instructions||'').slice(0,90))}</span></span>
+     <span class="x" onclick="editAgent('${a.id}')" title="แก้">✎</span><span class="x" onclick="delAgent('${a.id}')" title="ลบ">✕</span>
+   </div>`).join(''):'<div class="hint" style="padding:16px">ยังไม่มี agent — สร้างด้านบน แล้วกดเลือกเพื่อใช้</div>'}`;
+}
+function useAgentId(id){ useAgent(_agents.find(x=>x.id===id)); }
+function useAgent(a){ currentAgent=a?{id:a.id,name:a.name,emoji:a.emoji}:null; localStorage.setItem('dsagent',JSON.stringify(currentAgent)); renderAgentChip(); if($('ovAgents').classList.contains('on')) renderAgents(); }
+function editAgent(id){ const a=_agents.find(x=>x.id===id); if(!a)return; $('ag_id').value=a.id; $('ag_emoji').value=a.emoji||''; $('ag_name').value=a.name; $('ag_instr').value=a.instructions||''; $('agentsBody').scrollTop=0; }
+function resetAgentForm(){ ['ag_id','ag_emoji','ag_name','ag_instr'].forEach(i=>{const e=$(i);if(e)e.value='';}); }
+async function saveAgent(){ const name=$('ag_name').value.trim(); if(!name){ alertBox('ใส่ชื่อ agent'); return; }
+  const body={id:$('ag_id').value||undefined,name,emoji:$('ag_emoji').value.trim()||'🤖',instructions:$('ag_instr').value};
+  const d=await fetch('/api/agents',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+  if(d.error){ alertBox(d.error); return; } _agents=d.agents||[]; if(currentAgent){ const u=_agents.find(a=>a.id===currentAgent.id); if(u) useAgent(u); } renderAgents(); }
+async function delAgent(id){ if(!await confirmBox('ลบ agent นี้?','ลบ Agent'))return; await fetch('/api/agents/'+id,{method:'DELETE'}); _agents=_agents.filter(a=>a.id!==id); if(currentAgent&&currentAgent.id===id) useAgent(null); renderAgents(); }
 // ---- แผงงาน (Tasks) ----
 let _tasks=[];
 const TASK_ST={pending:{t:'รอ',c:'#5a6078'},running:{t:'กำลังทำ',c:'#4d9bff'},done:{t:'เสร็จ',c:'#10b981'},failed:{t:'ล้มเหลว',c:'#ef4444'}};

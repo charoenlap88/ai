@@ -271,11 +271,13 @@ const sysPrompt = (root, isAdmin) => `คุณคือ "AI Agent" ผู้ช
 - ทำเสร็จสรุปสั้นๆ เป็นภาษาไทย พร้อมอ้างอิงลิงก์ที่ใช้
 ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (ต้องทำตามเคร่งครัด) =====\n' + AGENT_RULES : ''}`;
 
-async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid) {
+async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid, agentInstr) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
   let tools = [...TOOLS, ...TASK_TOOLS]; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // task + extension
-  const msgs = [{ role: 'system', content: sysPrompt(root, isAdmin) }, ...messages];
+  const msgs = [{ role: 'system', content: sysPrompt(root, isAdmin) }];
+  if (agentInstr) msgs.push({ role: 'system', content: 'บทบาท/หน้าที่เฉพาะที่ผู้ใช้กำหนดให้คุณ (ยึดตามนี้เป็นหลัก):\n' + agentInstr });
+  msgs.push(...messages);
   const MAX = Number(process.env.MAX_ROUNDS) || 100; // ทำต่อเนื่องจนจบ (backstop กัน runaway)
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
   let totalTokens = 0; // นับ token รวมทุกรอบ (สำหรับ quota)
@@ -419,6 +421,19 @@ const server = http.createServer(async (req, res) => {
       const list = [...wsClients.entries()].map(([uid, set]) => { const u = loadUsers().find(x => x.id === uid); return { email: u ? u.email : uid, conns: set.size }; });
       return J(res, 200, { users: wsClients.size, connections: list.reduce((a, b) => a + b.conns, 0), list });
     }
+    // ---- Saved Agents (บทบาทสำเร็จรูป ใช้ซ้ำ) ----
+    if (p === '/api/agents' && req.method === 'GET') return J(res, 200, me.agents || []);
+    if (p === '/api/agents' && req.method === 'POST') {
+      const b = JSON.parse(await readBody(req) || '{}'); if (!b.name) return J(res, 400, { error: 'ต้องมีชื่อ agent' });
+      const users = loadUsers(); const u = users.find(x => x.id === me.id); if (!u) return J(res, 404, { error: 'not found' });
+      u.agents = u.agents || [];
+      if (b.id) { const a = u.agents.find(x => x.id === b.id); if (a) { a.name = String(b.name).slice(0, 60); a.emoji = String(b.emoji || '🤖').slice(0, 4); a.instructions = String(b.instructions || '').slice(0, 4000); } }
+      else u.agents.push({ id: 'ag' + Date.now().toString(36), name: String(b.name).slice(0, 60), emoji: String(b.emoji || '🤖').slice(0, 4), instructions: String(b.instructions || '').slice(0, 4000) });
+      saveUsers(users); return J(res, 200, { ok: true, agents: u.agents });
+    }
+    if ((m = p.match(/^\/api\/agents\/([\w-]+)$/)) && req.method === 'DELETE') {
+      const users = loadUsers(); const u = users.find(x => x.id === me.id); if (u) { u.agents = (u.agents || []).filter(a => a.id !== m[1]); saveUsers(users); } return J(res, 200, { ok: true });
+    }
     if (p === '/api/tasks' && req.method === 'GET') return J(res, 200, userTasks(me.id));
     if (p === '/api/tasks/clear' && req.method === 'POST') { TASKS.set(me.id, []); return J(res, 200, { ok: true }); }
     if (p === '/api/serverstat' && req.method === 'GET') {
@@ -555,7 +570,8 @@ const server = http.createServer(async (req, res) => {
     }
     // ---- chat (เว็บ: loop ฝั่ง server) ----
     if (p === '/api/chat' && req.method === 'POST') {
-      const { messages, allowWrite, allowShell, root } = JSON.parse(await readBody(req) || '{}');
+      const { messages, allowWrite, allowShell, root, agentId } = JSON.parse(await readBody(req) || '{}');
+      const _ag = agentId && (me.agents || []).find(a => a.id === agentId); const agentInstr = _ag ? _ag.instructions : '';
       if (!KEY) return J(res, 400, { error: 'ยังไม่ได้ตั้ง DEEPSEEK_API_KEY ใน .env' });
       if (me.quota > 0 && me.used >= me.quota) return J(res, 403, { error: 'ใช้ token ครบโควตาแล้ว (' + me.used + '/' + me.quota + ') — ติดต่อ admin' });
       // ความปลอดภัย: แก้ไฟล์/รันคำสั่ง + เลือกโฟลเดอร์อิสระ = admin เท่านั้น · user อื่นถูกขังใน sandbox (กันแก้/ลบ/อ่านไฟล์ server)
@@ -566,7 +582,7 @@ const server = http.createServer(async (req, res) => {
         : (fs.mkdirSync(path.join(DIR, 'workspaces', me.id), { recursive: true }), path.join(DIR, 'workspaces', me.id));
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       try {
-        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin, me.id);
+        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin, me.id, agentInstr);
         addUsage(me.id, out.tokens); // นับ quota
         out.used = (me.used || 0) + (out.tokens || 0); out.quota = me.quota;
         res.write(JSON.stringify({ type: 'done', ...out }) + '\n');
