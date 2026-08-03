@@ -391,7 +391,16 @@ async function saveSession(){ const title = (history.find(m=>m.role==='user')||{
 function add(cls, html){ const d=document.createElement('div'); d.className='msg '+cls; d.innerHTML=html; $('chat').appendChild(d); $('chat').scrollTop=1e9; return d; }
 function renderHistory(){ $('chat').innerHTML=''; history.forEach((m,i)=>{ const el=add(m.role==='user'?'user':'bot', m.role==='user'?esc(m.content):fmt(m.content)); if(m.role!=='user'){ renderMermaid(el); el.appendChild(msgActions(m.content)); if(thoughts[i]&&thoughts[i].length) el.appendChild(thoughtChip(i)); } }); if(!history.length) $('chat').innerHTML='<div class="hint">ว่าง</div>'; }
 function thoughtChip(id){ const b=document.createElement('button'); b.className='thchip'; b.innerHTML=ic('brain',13)+' ดูขั้นตอนการคิด ('+(thoughts[id]?thoughts[id].length:0)+')'; b.onclick=()=>showThoughts(id); return b; }
-function showThoughts(id){ const list=thoughts[id]||[]; $('thinkBody').innerHTML = list.length ? list.map((s,i)=>`<div style="display:flex;gap:9px;padding:8px 4px;border-bottom:1px solid #20242f;font-size:13px"><span style="color:#5a6078;flex-shrink:0;min-width:18px;text-align:right">${i+1}</span><span style="overflow-wrap:anywhere">${esc(s)}</span></div>`).join('') : '<div class="hint">ไม่มีขั้นตอน</div>'; $('ovThink').classList.add('on'); }
+function showThoughts(id){ const list=thoughts[id]||[];
+  $('thinkBody').innerHTML = list.length ? list.map((s,i)=>{
+    const isT=s.startsWith('💭'), isErr=/^(❌|🛑)/.test(s), isNoti=s.startsWith('แจ้ง:');
+    const bg=isErr?'#3a1414':isT?'#1a2540':isNoti?'#12261a':'#161922';
+    const col=isErr?'#ff9a9a':isT?'#cdd3e6':'#a9b0c6';
+    return `<div style="display:flex;gap:11px;padding:11px 4px;border-bottom:1px solid #1c2030">
+      <span style="flex:none;width:24px;height:24px;border-radius:50%;background:${bg};color:#8a90a6;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${i+1}</span>
+      <span style="flex:1;overflow-wrap:anywhere;font-size:13px;line-height:1.55;color:${col}">${esc(s.replace(/^💭\s*/,'').replace(/^แจ้ง:\s*/,'📢 '))}</span></div>`;
+  }).join('') : '<div class="hint" style="padding:20px">ไม่มีขั้นตอน</div>';
+  $('ovThink').classList.add('on'); }
 let genController=null;
 function setSending(on){ const b=$('sendBtn'); b.textContent=on?'หยุด':'ส่ง'; b.onclick=on?stopGen:send; b.classList.toggle('stop',on); }
 function stopGen(){ if(genController) genController.abort(); }
@@ -450,7 +459,7 @@ async function send(){
     if(result){
       if(result.used!=null&&me){ me.used=result.used; me.quota=result.quota; renderUser(); } // อัปเดต quota
       history.push({role:'assistant',content:result.reply});
-      const ti=history.length-1; if(steps.length) thoughts[ti]=steps.slice(); // เก็บประวัติการคิดของคำตอบนี้
+      const clean=steps.filter(s=>!/^กำลังคิด\.\.\./.test(s)); const ti=history.length-1; if(clean.length) thoughts[ti]=clean; // เก็บเฉพาะขั้นตอนจริง (ตัดตัวนับรอบออก)
       const botEl=add('bot', fmt(result.reply)); renderMermaid(botEl);
       botEl.appendChild(msgActions(result.reply));
       if(thoughts[ti]) botEl.appendChild(thoughtChip(ti));
