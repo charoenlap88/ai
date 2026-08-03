@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import * as db from './services/db.js';
 import * as office from './services/office.js';
+import * as jira from './services/jira.js';
 const pexec = promisify(exec);
 // ponytail: โหลด .env เอง (node<20.6 ไม่มี process.loadEnvFile) — cwd ก่อน แล้ว fallback ที่โฟลเดอร์ไฟล์
 for (const _f of [path.resolve('.env'), fileURLToPath(new URL('.env', import.meta.url))]) {
@@ -115,7 +116,11 @@ async function extractText(name, buf) {
   return buf.toString('utf8'); // txt/csv/md/json/code
 }
 
-async function runTool(name, args, allowWrite, allowShell, log, root, onNotify) {
+async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, ext) {
+  if (name.startsWith('jira_')) {
+    if (!ext || !ext.jira || !ext.jira.enabled) return 'ยังไม่ได้เปิด/ตั้งค่า extension Jira (ไปที่เมนู Extensions)';
+    try { return await jira.run(name, args, ext.jira); } catch (e) { return 'Jira error: ' + String(e.message || e).slice(0, 300); }
+  }
   if (name === 'notify') { onNotify && onNotify(args.message || ''); return 'แจ้ง user แล้ว'; }
   if (name === 'generate_image') {
     const url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(args.prompt || '') + '?width=' + (Number(args.width) || 1024) + '&height=' + (Number(args.height) || 1024) + '&nologo=true&model=flux';
@@ -240,9 +245,10 @@ const sysPrompt = (root) => `คุณคือ "AI Agent" ผู้ช่วย
 - ทำเสร็จสรุปสั้นๆ เป็นภาษาไทย พร้อมอ้างอิงลิงก์ที่ใช้
 ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (ต้องทำตามเคร่งครัด) =====\n' + AGENT_RULES : ''}`;
 
-async function chat(messages, allowWrite, allowShell, onStep, root, onNotify) {
+async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
+  const tools = (ext && ext.jira && ext.jira.enabled) ? [...TOOLS, ...jira.TOOLS] : TOOLS; // extension เปิด = เพิ่ม tool
   const msgs = [{ role: 'system', content: sysPrompt(root) }, ...messages];
   const MAX = Number(process.env.MAX_ROUNDS) || 100; // ทำต่อเนื่องจนจบ (backstop กัน runaway)
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
@@ -253,7 +259,7 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify) {
     for (let attempt = 0; attempt < 3; attempt++) { // retry กัน DeepSeek ตอบหลุด/ไม่ครบ (unexpected end of JSON input)
       const res = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: MODEL, messages: msgs, tools: TOOLS, tool_choice: 'auto', max_tokens: 8000 }),
+        body: JSON.stringify({ model: MODEL, messages: msgs, tools, tool_choice: 'auto', max_tokens: 8000 }),
       });
       const txt = await res.text();
       if (!res.ok) {
@@ -277,7 +283,7 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify) {
         return { reply: 'หยุดอัตโนมัติ — agent เรียกคำสั่งเดิมซ้ำหลายรอบ (งานนี้อาจทำไม่ได้/ไม่มีข้อมูลให้ทำต่อ)', actions: log.items, truncated: true, tokens: totalTokens };
       }
       let out;
-      try { out = await runTool(tc.function.name, JSON.parse(tc.function.arguments || '{}'), allowWrite, allowShell, log, root, onNotify); }
+      try { out = await runTool(tc.function.name, JSON.parse(tc.function.arguments || '{}'), allowWrite, allowShell, log, root, onNotify, ext); }
       catch (e) { out = 'ERROR: ' + e.message; log.push('❌ ' + e.message); }
       msgs.push({ role: 'tool', tool_call_id: tc.id, content: String(out) });
     }
@@ -404,6 +410,31 @@ const server = http.createServer(async (req, res) => {
       try { const text = await extractText(name, buf); return J(res, 200, { name, text: (text || '').slice(0, 120000) }); }
       catch (e) { return J(res, 500, { error: 'อ่านไฟล์ไม่สำเร็จ: ' + String(e.message || e).slice(0, 200) }); }
     }
+    // ---- Extensions (ต่อบริการภายนอก เช่น Jira) ----
+    if (p === '/api/ext' && req.method === 'GET') {
+      const j = (me.ext && me.ext.jira) || {};
+      return J(res, 200, { jira: { enabled: !!j.enabled, baseUrl: j.baseUrl || '', email: j.email || '', hasToken: !!j.token } });
+    }
+    if (p === '/api/ext/jira' && req.method === 'POST') {
+      const b = JSON.parse(await readBody(req) || '{}');
+      const users = loadUsers(); const u = users.find(x => x.id === me.id); if (!u) return J(res, 404, { error: 'not found' });
+      u.ext = u.ext || {}; const cur = u.ext.jira || {};
+      u.ext.jira = {
+        enabled: b.enabled != null ? !!b.enabled : !!cur.enabled,
+        baseUrl: b.baseUrl != null ? String(b.baseUrl).trim() : (cur.baseUrl || ''),
+        email: b.email != null ? String(b.email).trim() : (cur.email || ''),
+        token: b.token ? String(b.token) : (cur.token || ''), // token ว่าง = คงของเดิม (ไม่ล้าง)
+      };
+      saveUsers(users);
+      return J(res, 200, { ok: true, enabled: u.ext.jira.enabled, hasToken: !!u.ext.jira.token });
+    }
+    if (p === '/api/ext/jira/test' && req.method === 'POST') {
+      const b = JSON.parse(await readBody(req) || '{}');
+      const cur = (me.ext && me.ext.jira) || {};
+      const cfg = { baseUrl: b.baseUrl || cur.baseUrl, email: b.email || cur.email, token: b.token || cur.token };
+      try { const r = await jira.test(cfg); return J(res, 200, { ok: true, user: r }); }
+      catch (e) { return J(res, 400, { error: String(e.message || e).slice(0, 300) }); }
+    }
     // ---- โฟลเดอร์ ----
     if (p === '/api/root' && req.method === 'GET') return J(res, 200, { root: DEFAULT_ROOT, hasKey: !!KEY }); // ค่าเริ่มต้น (แต่ละ session เลือกเอง)
     if (p === '/api/browse') {
@@ -493,7 +524,7 @@ const server = http.createServer(async (req, res) => {
         : (fs.mkdirSync(path.join(DIR, 'workspaces', me.id), { recursive: true }), path.join(DIR, 'workspaces', me.id));
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       try {
-        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'));
+        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {});
         addUsage(me.id, out.tokens); // นับ quota
         out.used = (me.used || 0) + (out.tokens || 0); out.quota = me.quota;
         res.write(JSON.stringify({ type: 'done', ...out }) + '\n');
