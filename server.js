@@ -14,7 +14,12 @@ import * as jira from './services/jira.js';
 import * as github from './services/github.js';
 import * as slack from './services/slack.js';
 import * as trello from './services/trello.js';
-const EXTS = { jira, github, slack, trello }; // registry extensions
+import * as telegram from './services/telegram.js';
+import * as line from './services/line.js';
+import * as discord from './services/discord.js';
+import * as notion from './services/notion.js';
+import * as confluence from './services/confluence.js';
+const EXTS = { jira, github, confluence, trello, telegram, line, discord, slack, notion }; // registry extensions
 const pexec = promisify(exec);
 // ponytail: โหลด .env เอง (node<20.6 ไม่มี process.loadEnvFile) — cwd ก่อน แล้ว fallback ที่โฟลเดอร์ไฟล์
 for (const _f of [path.resolve('.env'), fileURLToPath(new URL('.env', import.meta.url))]) {
