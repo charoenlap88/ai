@@ -90,8 +90,8 @@ const TOOLS = [
   { type: 'function', function: { name: 'bg_list', description: 'ลิสต์ background jobs ทั้งหมด', parameters: { type: 'object', properties: {}, required: [] } } },
 ];
 const JOBS = new Map(); // background jobs: id -> {proc, status, out[], cmd, started}
-const TASKS = new Map(); // userId -> [{id,title,status,created,done}] แผนงานที่ AI สร้าง (in-memory)
-const userTasks = uid => { if (!TASKS.has(uid)) TASKS.set(uid, []); return TASKS.get(uid); };
+// แผนงานเก็บใน record ของ user (persist ข้าม restart)
+const userTasks = uid => { const u = loadUsers().find(x => x.id === uid); return (u && u.tasks) || []; };
 const wsTasks = uid => wsBroadcast({ type: 'tasks', tasks: userTasks(uid) }, uid); // push แผงงานล่าสุดให้ UI
 const TASK_TOOLS = [
   { type: 'function', function: { name: 'task_add', description: 'เพิ่มงานย่อยลงแผนงาน (แสดงเป็น checklist ให้ user เห็นสถานะเรียงก่อน/หลัง) — คืน id · ใช้เมื่องานมีหลายขั้นตอน', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } } },
@@ -141,10 +141,10 @@ async function extractText(name, buf) {
 
 async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, ext, uid) {
   if (name.startsWith('task_')) {
-    const arr = userTasks(uid || 'anon');
-    if (name === 'task_add') { const t = { id: 'tk' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), title: String(args.title || 'งาน').slice(0, 140), status: 'pending', created: Date.now() }; arr.push(t); wsTasks(uid); return 'เพิ่มงาน: "' + t.title + '" (id ' + t.id + ')'; }
-    if (name === 'task_update') { const t = arr.find(x => x.id === args.id); if (!t) return 'ไม่พบงาน ' + args.id; t.status = args.status || t.status; if (t.status === 'done' || t.status === 'failed') t.done = Date.now(); wsTasks(uid); if (t.status === 'done') wsBroadcast({ type: 'task_done', title: t.title }, uid); return 'อัปเดต "' + t.title + '" → ' + t.status; }
-    if (name === 'task_list') { return arr.length ? arr.map(t => '[' + t.status + '] ' + t.title).join('\n') : 'ยังไม่มีงานในแผน'; }
+    const users = loadUsers(); const u = users.find(x => x.id === uid); if (!u) return 'ไม่พบผู้ใช้'; u.tasks = u.tasks || [];
+    if (name === 'task_add') { const t = { id: 'tk' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), title: String(args.title || 'งาน').slice(0, 140), status: 'pending', created: Date.now() }; u.tasks.push(t); saveUsers(users); wsTasks(uid); return 'เพิ่มงาน: "' + t.title + '" (id ' + t.id + ')'; }
+    if (name === 'task_update') { const t = u.tasks.find(x => x.id === args.id); if (!t) return 'ไม่พบงาน ' + args.id; t.status = args.status || t.status; if (t.status === 'done' || t.status === 'failed') t.done = Date.now(); saveUsers(users); wsTasks(uid); if (t.status === 'done') wsBroadcast({ type: 'task_done', title: t.title }, uid); return 'อัปเดต "' + t.title + '" → ' + t.status; }
+    if (name === 'task_list') { return u.tasks.length ? u.tasks.map(t => '[' + t.status + '] ' + t.title).join('\n') : 'ยังไม่มีงานในแผน'; }
   }
   if (name === 'memory_add') { const users = loadUsers(); const u = users.find(x => x.id === uid); if (!u) return 'ไม่พบผู้ใช้'; u.memory = u.memory || []; u.memory.push({ id: 'm' + Date.now().toString(36), text: String(args.text || '').slice(0, 300), created: Date.now() }); if (u.memory.length > 200) u.memory = u.memory.slice(-200); saveUsers(users); return 'จำไว้แล้ว: ' + args.text; }
   if (name === 'memory_list') { const u = loadUsers().find(x => x.id === uid); return ((u && u.memory) || []).map(m => '- ' + m.text).join('\n') || 'ยังไม่มีความจำ'; }
@@ -473,8 +473,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/kb' && req.method === 'GET') return J(res, 200, (me.kb || []).map(d => ({ id: d.id, name: d.name, size: d.text.length })));
     if (p === '/api/kb' && req.method === 'POST') { const b = JSON.parse(await readBody(req) || '{}'); if (!b.text || !b.name) return J(res, 400, { error: 'ต้องมีชื่อ+เนื้อหา' }); const users = loadUsers(); const u = users.find(x => x.id === me.id); u.kb = u.kb || []; if (u.kb.length >= 50) return J(res, 400, { error: 'เอกสารเต็ม (สูงสุด 50)' }); u.kb.push({ id: 'kb' + Date.now().toString(36), name: String(b.name).slice(0, 120), text: String(b.text).slice(0, 300000) }); saveUsers(users); return J(res, 200, { ok: true, kb: u.kb.map(d => ({ id: d.id, name: d.name, size: d.text.length })) }); }
     if ((m = p.match(/^\/api\/kb\/([\w-]+)$/)) && req.method === 'DELETE') { const users = loadUsers(); const u = users.find(x => x.id === me.id); if (u) { u.kb = (u.kb || []).filter(x => x.id !== m[1]); saveUsers(users); } return J(res, 200, { ok: true }); }
-    if (p === '/api/tasks' && req.method === 'GET') return J(res, 200, userTasks(me.id));
-    if (p === '/api/tasks/clear' && req.method === 'POST') { TASKS.set(me.id, []); return J(res, 200, { ok: true }); }
+    if (p === '/api/tasks' && req.method === 'GET') return J(res, 200, me.tasks || []);
+    if (p === '/api/tasks/clear' && req.method === 'POST') { const users = loadUsers(); const u = users.find(x => x.id === me.id); if (u) { u.tasks = (u.tasks || []).filter(t => t.status !== 'done' && t.status !== 'failed'); saveUsers(users); } return J(res, 200, { ok: true, tasks: (u && u.tasks) || [] }); }
+    if (p === '/api/backup' && req.method === 'GET') {
+      if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
+      const data = JSON.stringify(backupBundle(), null, 2);
+      res.writeHead(200, { 'content-type': 'application/json', 'content-disposition': 'attachment; filename="ai-agent-backup-' + Date.now() + '.json"' });
+      return res.end(data);
+    }
     if (p === '/api/serverstat' && req.method === 'GET') {
       if (me.role !== 'admin') return J(res, 403, { error: 'admin เท่านั้น' });
       const total = os.totalmem(), free = os.freemem();
@@ -685,6 +691,11 @@ server.on('upgrade', (req, socket) => {
   socket.on('data', b => wsHandle(socket, b));
   socket.on('close', cleanup); socket.on('error', cleanup); socket.on('end', cleanup);
 });
+
+// ---- backup ข้อมูล (กันหาย) ----
+function backupBundle() { return { at: new Date().toISOString(), users: loadUsers(), sessions: db.listSessions(), schedules: loadSched() }; }
+function autoBackup() { try { const dir = path.join(DIR, 'backups'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'backup-' + Date.now() + '.json'), JSON.stringify(backupBundle())); const fs2 = fs.readdirSync(dir).filter(f => f.startsWith('backup-')).sort(); while (fs2.length > 14) fs.rmSync(path.join(dir, fs2.shift()), { force: true }); } catch (e) { console.error('backup:', e.message); } }
+setInterval(autoBackup, 12 * 3600 * 1000); setTimeout(autoBackup, 30000); // ทุก 12 ชม. + ตอนเริ่ม (เก็บ 14 ชุดล่าสุด)
 
 // bind 127.0.0.1 เท่านั้น = เข้าจากเครื่องนี้เท่านั้น (ปลอดภัย)
 server.listen(PORT, '127.0.0.1', () => console.log(`DeepSeek agent → http://localhost:${PORT}\n  DEFAULT ROOT = ${DEFAULT_ROOT}\n  key  = ${KEY ? 'ตั้งแล้ว' : '❌ ยังไม่ตั้ง'}`));

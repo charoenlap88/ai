@@ -856,6 +856,7 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
       ${card('Quota รวม (จำกัด)',fmtN(totQuota),'+ '+unlimited+' คนไม่จำกัด')}
     </div>
     ${srv}${chart}
+    <div style="display:flex;gap:8px;margin-bottom:14px"><button class="btn" onclick="dlBackup()">⬇️ ดาวน์โหลด Backup ข้อมูล (.json)</button><span style="font-size:11.5px;color:#8a90a6;align-self:center">· server backup อัตโนมัติทุก 12 ชม.</span></div>
     <div style="background:#0f1117;border:1px solid #2a2f42;border-radius:11px;padding:12px;margin-bottom:14px">
       <div class="lbl" style="margin-bottom:7px">ส่งข้อความหาผู้ใช้ (realtime)</div>
       <div style="display:flex;gap:8px">
@@ -877,6 +878,7 @@ async function openAdmin(){ $('ovAdmin').classList.add('on'); const a=await fetc
      </td></tr>`).join('')+`</table></div><div class="lbl" style="margin-top:10px">quota 0 = ไม่จำกัด · ตั้งตัวเลขแล้วกดบันทึก</div>`;
 }
 async function setUser(id,body){ await fetch('/api/users/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); openAdmin(); }
+async function dlBackup(){ const r=await fetch('/api/backup'); if(!r.ok){ alertBox('ดาวน์โหลด backup ไม่สำเร็จ'); return; } const b=await r.blob(); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='ai-agent-backup-'+Date.now()+'.json'; a.click(); }
 async function toggleSeeAll(on){ const d=await fetch('/api/seeall',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on})}).then(r=>r.json()); if(me) me.seeAll=d.seeAll; loadSessions(); }
 async function sendMsg(email){
   const text = email ? await promptBox('ส่งข้อความหา '+email+':','','ส่งข้อความ') : ($('bcastMsg')?$('bcastMsg').value.trim():'');
@@ -956,7 +958,7 @@ function renderTasks(){ const el=$('tasksBody'); if(!el)return;
       <span style="font-size:11px;color:${s.c}">${s.t}</span></div>`; }).join('') : '<div class="hint" style="padding:26px">ยังไม่มีงาน — สั่ง AI ทำงานที่มีหลายขั้นตอน แล้วแผนงาน+สถานะจะโผล่ที่นี่แบบ real-time</div>';
 }
 async function openTasks(){ _tasks=await fetch('/api/tasks').then(r=>r.json()).catch(()=>[]); renderTasks(); updateTaskBadge(); $('ovTasks').classList.add('on'); }
-async function clearTasks(){ await fetch('/api/tasks/clear',{method:'POST'}); _tasks=[]; renderTasks(); updateTaskBadge(); }
+async function clearTasks(){ const d=await fetch('/api/tasks/clear',{method:'POST'}).then(r=>r.json()); _tasks=d.tasks||[]; renderTasks(); updateTaskBadge(); }
 async function refreshTasks(){ _tasks=await fetch('/api/tasks').then(r=>r.json()).catch(()=>[]); updateTaskBadge(); }
 // ---- คลัง prompt ----
 const BUILTIN_PROMPTS=['สรุปไฟล์ที่แนบให้เป็นข้อๆ','ช่วยตรวจแก้ข้อความนี้ให้เป็นทางการ:','แปลเป็นภาษาอังกฤษ:','เขียน commit message จากการเปลี่ยนแปลงนี้','อธิบายโค้ดนี้ทีละส่วน','หา bug ในโค้ดนี้ พร้อมวิธีแก้','สร้างไฟล์ Excel สรุป...','วาด flowchart ของ...','สร้างรูปภาพ:'];
