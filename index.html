@@ -14,9 +14,9 @@
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
-  :root{--pri:#4d6bff;--app-bg:#0f1117;--font:system-ui,-apple-system,"Segoe UI",sans-serif;--fs-msg:14px;--fs-ui:13px;font-family:var(--font)}
+  :root{--pri:#4d6bff;--app-bg:#0f1117;--text:#e6e8ef;--font:system-ui,-apple-system,"Segoe UI",sans-serif;--fs-msg:14px;--fs-ui:13px;font-family:var(--font)}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--app-bg);color:#e6e8ef;height:100vh;height:100dvh;display:flex}
+  body{margin:0;background:var(--app-bg);color:var(--text);height:100vh;height:100dvh;display:flex}
   /* sidebar */
   .side{width:250px;flex:none;background:#12141d;border-right:1px solid #262a38;display:flex;flex-direction:column}
   .side .sec{padding:10px 12px;border-bottom:1px solid #20242f}
@@ -87,6 +87,8 @@
   /* folder modal */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
   .overlay.on{display:flex}
+  #ovTasks{justify-content:flex-end}
+  #ovTasks .drawer{height:100dvh;max-height:100dvh;border-radius:0;border-top:0;border-bottom:0;border-right:0}
   .modal{background:#171a24;border:1px solid #2a2f42;border-radius:14px;width:520px;max-width:92vw;max-height:80vh;max-height:80dvh;display:flex;flex-direction:column}
   .modal h3{margin:0;padding:14px 16px;border-bottom:1px solid #262a38;font-size:15px}
   .modal .cur{padding:8px 16px;font-size:12px;color:#a9b0c6;word-break:break-all;border-bottom:1px solid #20242f}
@@ -286,7 +288,7 @@
 </div>
 
 <div class="overlay" id="ovTasks" onclick="if(event.target===this)$('ovTasks').classList.remove('on')">
-  <div class="modal" style="width:520px;max-height:82vh">
+  <div class="modal drawer" style="width:380px;max-width:88vw">
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> แผงงาน (Tasks)</h3>
     <div class="mbody" id="tasksBody"></div>
     <div class="mfoot"><button class="btn" onclick="clearTasks()">ล้างที่เสร็จแล้ว</button><button class="btn pri" onclick="$('ovTasks').classList.remove('on')">ปิด</button></div>
@@ -592,6 +594,10 @@ const THEMES=[
   {n:'Gold',pri:'#eab308',bg:'#12100a'},
   {n:'Teal',pri:'#14b8a6',bg:'linear-gradient(160deg,#0a1413,#0d201d)'},
   {n:'Indigo',pri:'#6366f1',bg:'linear-gradient(160deg,#0c0f1f,#141a33)'},
+  {n:'Matrix',pri:'#00ff41',bg:'#000000',text:'#33ff77',font:'ui-monospace,"Courier New",monospace'},
+  {n:'อวกาศ',pri:'#8b5cf6',bg:'radial-gradient(120% 100% at 50% 0%,#12103a 0%,#050510 70%)',text:'#dfe3ff'},
+  {n:'AI',pri:'#00d4ff',bg:'linear-gradient(160deg,#03121a,#071b2e)',text:'#d6f5ff'},
+  {n:'Robot',pri:'#ff7a00',bg:'linear-gradient(160deg,#15171b,#1c1f26)',text:'#e8e6df',font:'ui-monospace,"Consolas",monospace'},
 ];
 const BGS=[{n:'ค่าเริ่มต้น',v:'#0f1117'},{n:'ดำสนิท',v:'#000000'},{n:'กรมท่า',v:'#0b1220'},{n:'ป่าเข้ม',v:'#0d1512'},{n:'ไล่ม่วง',v:'linear-gradient(160deg,#0f0c29,#191933)'},{n:'ไล่น้ำเงิน',v:'linear-gradient(160deg,#0b1220,#122338)'}];
 const FONTS=[{n:'ค่าเริ่มต้น',v:'system-ui,-apple-system,"Segoe UI",sans-serif'},{n:'Serif',v:'Georgia,"Times New Roman",serif'},{n:'Monospace',v:'ui-monospace,Menlo,Consolas,monospace'},{n:'มน',v:'"Trebuchet MS",Verdana,system-ui,sans-serif'}];
@@ -599,7 +605,9 @@ const SIZES=[{n:'เล็ก',v:'12.5px'},{n:'กลาง',v:'14px'},{n:'ใ�
 function loadSet(){ try{ return JSON.parse(localStorage.getItem('dssettings'))||{}; }catch{ return {}; } }
 function applySettings(s){ const r=document.documentElement.style;
   r.setProperty('--pri', s.pri||'#4d6bff'); r.setProperty('--app-bg', s.bg||'#0f1117');
+  r.setProperty('--text', s.text||'#e6e8ef');
   r.setProperty('--font', s.font||FONTS[0].v); r.setProperty('--fs-msg', s.fsMsg||'14px'); }
+function setThemeObj(t){ settings.pri=t.pri; settings.bg=t.bg; settings.text=t.text||''; settings.font=t.font||''; localStorage.setItem('dssettings',JSON.stringify(settings)); applySettings(settings); renderSettings(); }
 let settings=loadSet(); applySettings(settings);
 function setSetting(k,v){ settings[k]=v; localStorage.setItem('dssettings',JSON.stringify(settings)); applySettings(settings); renderSettings(); }
 function setTheme(pri,bg){ settings.pri=pri; settings.bg=bg; localStorage.setItem('dssettings',JSON.stringify(settings)); applySettings(settings); renderSettings(); }
@@ -672,7 +680,7 @@ function renderSettings(){
     return `<button onclick='setSetting(${JSON.stringify(key)},${JSON.stringify(o.v)})' style="padding:7px 12px;border-radius:9px;border:1px solid ${a?'var(--pri)':'#2a2f42'};background:${a?'var(--pri)':'#0f1117'};color:${a?'#fff':'#cdd3e6'};cursor:pointer;font:inherit;font-size:12.5px">${o.n}</button>`; }).join('');
   const swatch=(cur)=> ACCENTS.map(c=>`<button onclick='setSetting("pri",${JSON.stringify(c)})' title="${c}" style="width:30px;height:30px;border-radius:50%;background:${c};border:2px solid ${(cur||'')===c?'#fff':'transparent'};cursor:pointer"></button>`).join('');
   const themeRow=THEMES.map(t=>{ const a=(settings.pri===t.pri&&settings.bg===t.bg);
-    return `<button onclick='setTheme(${JSON.stringify(t.pri)},${JSON.stringify(t.bg)})' title="${t.n}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:10px;border:1px solid ${a?'var(--pri)':'#2a2f42'};background:#0f1117;cursor:pointer;width:62px"><span style="width:100%;height:24px;border-radius:6px;background:${t.bg}"></span><span style="width:15px;height:15px;border-radius:50%;background:${t.pri}"></span><span style="font-size:10px;color:#cdd3e6">${t.n}</span></button>`; }).join('');
+    return `<button onclick='setThemeObj(${JSON.stringify(t)})' title="${t.n}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:10px;border:1px solid ${a?'var(--pri)':'#2a2f42'};background:#0f1117;cursor:pointer;width:62px"><span style="width:100%;height:24px;border-radius:6px;background:${t.bg}"></span><span style="width:15px;height:15px;border-radius:50%;background:${t.pri}"></span><span style="font-size:10px;color:#cdd3e6">${t.n}</span></button>`; }).join('');
   $('setBody').innerHTML=`
     <div class="setrow"><div class="lbl">ธีมสำเร็จรูป</div><div class="setopts">${themeRow}</div></div>
     <div class="setrow"><div class="lbl">สีหลัก (ปุ่ม/ไฮไลต์)</div><div class="setopts">${swatch(settings.pri||'#4d6bff')}<input type="color" value="${settings.pri||'#4d6bff'}" onchange="setSetting('pri',this.value)" style="width:32px;height:32px;border:none;background:none;cursor:pointer" title="เลือกสีเอง"></div></div>
