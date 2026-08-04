@@ -286,7 +286,33 @@ const sysPrompt = (root, isAdmin) => `คุณคือ "AI Agent" ผู้ช
 - ทำเสร็จสรุปสั้นๆ เป็นภาษาไทย พร้อมอ้างอิงลิงก์ที่ใช้
 ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (ต้องทำตามเคร่งครัด) =====\n' + AGENT_RULES : ''}`;
 
-async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid, agentInstr) {
+// เรียก DeepSeek แบบ stream — สตรีม content ทีละชิ้นผ่าน onDelta, ประกอบ tool_calls จาก fragment
+async function streamRound(msgs, tools, onDelta) {
+  const res = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ model: MODEL, messages: msgs, tools, tool_choice: 'auto', max_tokens: 8000, stream: true, stream_options: { include_usage: true } }),
+  });
+  if (!res.ok) throw new Error('DeepSeek ' + res.status + ' ' + (await res.text()).slice(0, 200));
+  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', content = '', tool = [], usage = 0;
+  for (;;) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true }); let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim(); if (data === '[DONE]') continue;
+      let j; try { j = JSON.parse(data); } catch { continue; }
+      if (j.usage) usage = j.usage.total_tokens || usage;
+      const d = j.choices && j.choices[0] && j.choices[0].delta; if (!d) continue;
+      if (d.content) { content += d.content; onDelta && onDelta(d.content); }
+      if (d.tool_calls) for (const tc of d.tool_calls) { const k = tc.index || 0; tool[k] = tool[k] || { id: '', type: 'function', function: { name: '', arguments: '' } }; if (tc.id) tool[k].id = tc.id; if (tc.function) { if (tc.function.name) tool[k].function.name += tc.function.name; if (tc.function.arguments) tool[k].function.arguments += tc.function.arguments; } }
+    }
+  }
+  const message = { role: 'assistant', content: content || null }; const tc = tool.filter(Boolean); if (tc.length) message.tool_calls = tc;
+  return { message, usage };
+}
+
+async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid, agentInstr, onDelta) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
   let tools = [...TOOLS, ...TASK_TOOLS, ...MEM_TOOLS]; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // task + memory + extension
@@ -299,25 +325,14 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ex
   let totalTokens = 0; // นับ token รวมทุกรอบ (สำหรับ quota)
   for (let i = 0; i < MAX; i++) {
     onStep && onStep('กำลังคิด... (' + (i + 1) + ')');
-    let jr = null;
-    for (let attempt = 0; attempt < 3; attempt++) { // retry กัน DeepSeek ตอบหลุด/ไม่ครบ (unexpected end of JSON input)
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: MODEL, messages: msgs, tools, tool_choice: 'auto', max_tokens: 8000 }),
-      });
-      const txt = await res.text();
-      if (!res.ok) {
-        if (res.status >= 500 && attempt < 2) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); continue; }
-        throw new Error('DeepSeek ' + res.status + ' ' + txt.slice(0, 200));
-      }
-      try { jr = JSON.parse(txt); } catch { jr = null; }
-      if (jr && jr.choices && jr.choices[0]) break; // ได้คำตอบครบ
-      if (attempt < 2) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); continue; }
-      throw new Error(jr && jr.error ? ('DeepSeek: ' + (jr.error.message || '')) : 'DeepSeek ตอบไม่สมบูรณ์ — ลองสั่งใหม่อีกครั้ง');
+    let round = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { round = await streamRound(msgs, tools, onDelta); break; }
+      catch (e) { if (attempt === 0 && /5\d\d|network|fetch|terminated|ECONN/i.test(String(e.message || e))) { onDelta && onDelta(null); await new Promise(r => setTimeout(r, 700)); continue; } throw e; }
     }
-    const m = jr.choices[0].message; totalTokens += jr.usage?.total_tokens || 0;
+    const m = round.message; totalTokens += round.usage || 0;
     msgs.push(m);
-    if (m.content && m.tool_calls && m.tool_calls.length) onStep && onStep('💭 ' + m.content); // พ่นเหตุผลกลางทางให้ user เห็นสด
+    if (m.content && m.tool_calls && m.tool_calls.length) { onStep && onStep('💭 ' + m.content); onDelta && onDelta(null); } // เหตุผลกลางทาง → เก็บใน log + ล้าง stream (ไม่ใช่คำตอบสุดท้าย)
     if (!m.tool_calls || !m.tool_calls.length) return { reply: m.content || '(ไม่มีข้อความ)', actions: log.items, truncated: false, tokens: totalTokens };
     for (const tc of m.tool_calls) {
       const sig = tc.function.name + ':' + tc.function.arguments;
@@ -607,7 +622,7 @@ const server = http.createServer(async (req, res) => {
         : (fs.mkdirSync(path.join(DIR, 'workspaces', me.id), { recursive: true }), path.join(DIR, 'workspaces', me.id));
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       try {
-        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin, me.id, agentInstr);
+        const out = await chat(messages || [], aw, ash, step => res.write(JSON.stringify({ type: 'step', text: step }) + '\n'), useRoot, msg => res.write(JSON.stringify({ type: 'notify', text: msg }) + '\n'), me.ext || {}, isAdmin, me.id, agentInstr, chunk => res.write(JSON.stringify({ type: 'delta', text: chunk }) + '\n'));
         addUsage(me.id, out.tokens); // นับ quota
         out.used = (me.used || 0) + (out.tokens || 0); out.quota = me.quota;
         res.write(JSON.stringify({ type: 'done', ...out }) + '\n');

@@ -524,7 +524,7 @@ async function send(){
   $('inp').value=''; add('user', esc(display)); history.push({role:'user',content:sendText});
   genController=new AbortController(); setSending(true);
   const thinking=add('acts','⏳ เริ่มทำงาน...');
-  const steps=[]; let result=null;
+  const steps=[]; let result=null, streamEl=null;
   try{
     const resp=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:history,allowWrite:$('allowWrite').checked,allowShell:$('allowShell').checked,root:currentRoot,agentId:currentAgent?currentAgent.id:undefined}),signal:genController.signal});
     const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
@@ -535,6 +535,7 @@ async function send(){
         const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+1); if(!line)continue;
         const ev=JSON.parse(line);
         if(ev.type==='step'){ steps.push(ev.text); thinking.textContent=steps.slice(-10).join('\n'); thinking.scrollTop=1e9; $('chat').scrollTop=1e9; }
+        else if(ev.type==='delta'){ if(ev.text===null){ if(streamEl){streamEl.remove();streamEl=null;} } else { if(!streamEl){ streamEl=add('bot',''); $('chat').appendChild(thinking); } streamEl.textContent+=ev.text; $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } } // สตรีมคำตอบทีละคำ
         else if(ev.type==='notify'){ steps.push('แจ้ง: '+ev.text); add('bot', fmt(ev.text)); $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } // ข้อความสด (แผน/ความคืบหน้า)
         else if(ev.type==='error'){ throw new Error(ev.error); }
         else if(ev.type==='done'){ result=ev; }
@@ -545,13 +546,13 @@ async function send(){
       if(result.used!=null&&me){ me.used=result.used; me.quota=result.quota; renderUser(); } // อัปเดต quota
       history.push({role:'assistant',content:result.reply});
       const clean=steps.filter(s=>!/^กำลังคิด\.\.\./.test(s)); const ti=history.length-1; if(clean.length) thoughts[ti]=clean; // เก็บเฉพาะขั้นตอนจริง (ตัดตัวนับรอบออก)
-      const botEl=add('bot', fmt(result.reply)); renderMermaid(botEl);
+      const botEl=streamEl||add('bot',''); streamEl=null; botEl.innerHTML=fmt(result.reply); renderMermaid(botEl); // ใช้ฟองที่สตรีมไว้ แล้วแทนด้วยเวอร์ชัน format
       botEl.appendChild(msgActions(result.reply));
       if(thoughts[ti]) botEl.appendChild(thoughtChip(ti));
       saveSession();
       if(voiceMode||readAloud) speak(result.reply); // โหมดเสียง/เปิดอ่านออกเสียง → อ่านคำตอบ
     }
-  }catch(e){ thinking.textContent = e.name==='AbortError' ? '⏹ หยุดแล้ว' : ('❌ '+e.message); }
+  }catch(e){ if(streamEl){streamEl.remove();streamEl=null;} thinking.textContent = e.name==='AbortError' ? '⏹ หยุดแล้ว' : ('❌ '+e.message); }
   finally{ genController=null; setSending(false); }
 }
 $('inp').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ const sm=$('slashMenu'); if(sm&&sm.style.display==='block'){ const f=sm.querySelector('button'); if(f){ e.preventDefault(); pickSlash(f); return; } } e.preventDefault(); send(); } else if(e.key==='Escape'){ const sm=$('slashMenu'); if(sm) sm.style.display='none'; } });
