@@ -42,7 +42,7 @@
   .sitem .x{opacity:.4;font-size:12px;flex:none}.sitem .x:hover{opacity:1;color:#ff8a8a}
   .catlbl{font-size:10.5px;color:#7a8098;text-transform:uppercase;letter-spacing:.5px;padding:11px 12px 4px;font-weight:600;display:flex;align-items:center;gap:5px}
   /* main */
-  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
   header{background:#171a24;border-bottom:1px solid #262a38;padding:max(9px,env(safe-area-inset-top)) 16px 9px;font-size:14px;font-weight:600}
   .warn{background:#3a2410;color:#ffcf8a;font-size:11.5px;padding:5px 16px;border-bottom:1px solid #4a3418}
   .ctrl{display:flex;align-items:center;gap:8px;padding:7px 16px;background:#141722;border-bottom:1px solid #262a38;font-size:13px}
@@ -54,6 +54,12 @@
   .thchip:hover{border-color:var(--pri);color:#cdd3e6}
   .mermaid{background:#0f1117;border:1px solid #2a2f42;border-radius:10px;padding:12px;margin:8px 0;overflow-x:auto;text-align:center}
   @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .imgwrap{display:block;margin:6px 0}
+  .chatimg{max-width:min(360px,100%);border-radius:10px;cursor:zoom-in;display:block}
+  .imgspin{display:inline-flex;align-items:center;gap:9px;background:#0f1117;border:1px solid #2a2f42;border-radius:10px;padding:14px 18px;color:#8a90a6;font-size:13px}
+  .imgspin::before{content:'';width:16px;height:16px;border:2px solid #2a2f42;border-top-color:var(--pri);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+  #scrollBtn{display:none;position:absolute;right:18px;bottom:150px;width:40px;height:40px;border-radius:50%;background:var(--pri);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45);z-index:6;align-items:center;justify-content:center}
   .msgact{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
   .mab{display:inline-flex;align-items:center;gap:5px;background:#0f1117;border:1px solid #2a2f42;color:#8a90a6;font-size:11.5px;padding:4px 9px;border-radius:8px;cursor:pointer;font-family:inherit}
   .mab:hover{border-color:var(--pri);color:#cdd3e6}
@@ -189,6 +195,7 @@
     <label style="color:#ffb98a;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="allowShell"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> อนุญาตรันคำสั่ง (อันตราย)</label>
   </div>
   <div id="chat"><div class="hint">พิมพ์สั่งงาน เช่น "อ่าน server.js สรุปให้หน่อย" · "ค้นเน็ตว่า X คืออะไร" · (เปิดแก้ไฟล์) "เพิ่ม endpoint /ping"</div></div>
+  <button id="scrollBtn" onclick="$('chat').scrollTo({top:1e9,behavior:'smooth'})" title="ลงล่างสุด"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></button>
   <div class="folderbar" id="folderBar">
     <span class="fb-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="fb-path" id="rootbox">...</span>
     <button class="fb-btn" onclick="openBrowse()">เปลี่ยนโฟลเดอร์</button>
@@ -292,6 +299,13 @@
   </div>
 </div>
 
+<div class="overlay" id="ovImg" onclick="$('ovImg').classList.remove('on')">
+  <div style="display:flex;flex-direction:column;gap:12px;align-items:center" onclick="event.stopPropagation()">
+    <img id="ovImgSrc" style="max-width:92vw;max-height:80vh;border-radius:10px">
+    <div style="display:flex;gap:10px"><button class="btn pri" onclick="dlImg($('ovImgSrc').src)">⬇️ ดาวน์โหลด</button><button class="btn" onclick="$('ovImg').classList.remove('on')">ปิด</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="ovTasks" onclick="if(event.target===this)$('ovTasks').classList.remove('on')">
   <div class="modal drawer" style="width:380px;max-width:88vw">
     <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> แผงงาน (Tasks)</h3>
@@ -358,7 +372,7 @@ window.fetch = (url, opts = {}) => { // แนบ token ให้ทุก /api
 const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 // render markdown แบบเบาๆ: code block + inline code/path พร้อมปุ่มคัดลอก
 function inlineFmt(s){ return esc(s)
-  .replace(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g, '<img src="$1" loading="lazy" style="max-width:100%;border-radius:8px;margin:6px 0;display:block">')
+  .replace(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g, '<span class="imgwrap"><span class="imgspin">กำลังสร้างรูป...</span><img src="$1" class="chatimg" style="display:none" loading="eager" onload="imgLoaded(this)" onerror="imgErr(this)" onclick="zoomImg(this.src)"></span>')
   .replace(/\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g, (m,t,u)=>`<a href="${u}" ${u.startsWith('/')?'download':'target="_blank" rel="noopener"'} style="color:#8ab4ff">${t}</a>`)
   .replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>'); }
 function codeBlock(code, lang){ return `<div class="codewrap"><div class="codehdr"><span>${esc(lang || 'code')}</span><button class="copy" data-c="${encodeURIComponent(code)}" onclick="copyCode(this)">📋 คัดลอก</button></div><pre class="code">${esc(code)}</pre></div>`; }
@@ -380,6 +394,11 @@ function renderMermaid(el){
   if(window.mermaid){ if(!mermaidInit){ try{ mermaid.initialize({startOnLoad:false,theme:'dark',securityLevel:'loose'}); }catch{} mermaidInit=true; } try{ mermaid.run({nodes}); }catch{} }
 }
 function copyCode(btn){ navigator.clipboard.writeText(decodeURIComponent(btn.dataset.c)); const o = btn.textContent; btn.textContent = '✅ คัดลอกแล้ว'; setTimeout(() => btn.textContent = o, 1200); }
+// ---- รูปภาพ: loading / zoom / download ----
+function imgLoaded(img){ img.style.display='block'; const s=img.previousElementSibling; if(s&&s.classList.contains('imgspin')) s.remove(); }
+function imgErr(img){ const s=img.previousElementSibling; if(s&&s.classList.contains('imgspin')) s.textContent='❌ สร้างรูปไม่สำเร็จ'; }
+function zoomImg(src){ $('ovImgSrc').src=src; $('ovImg').classList.add('on'); }
+async function dlImg(src){ try{ const r=await fetch(src); const b=await r.blob(); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='ai-image-'+Date.now()+'.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),8000); }catch{ window.open(src,'_blank'); } }
 let history = [], currentId = null, browsePath = '', defaultRoot = '', currentRoot = '', noKey = false, thoughts = {};
 
 // ---- root / folder ----
@@ -909,6 +928,7 @@ document.addEventListener('keydown',e=>{
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); if(authToken&&typeof newChat==='function'){ newChat(); const i=$('inp'); if(i) i.focus(); } }
   else if((e.ctrlKey||e.metaKey)&&e.key==='/'){ e.preventDefault(); alertBox('Ctrl/⌘ + K = แชทใหม่\nCtrl/⌘ + / = ดูคีย์ลัด\nEsc = ปิดหน้าต่าง\nEnter = ส่ง · Shift+Enter = ขึ้นบรรทัด','⌨️ คีย์ลัด'); }
 });
+$('chat').addEventListener('scroll',()=>{ const c=$('chat'),b=$('scrollBtn'); if(b) b.style.display=(c.scrollHeight-c.scrollTop-c.clientHeight>140)?'flex':'none'; });
 initAuth();
 function pwEye(btn,id){
   const i=$(id), show=i.type==='password'; i.type=show?'text':'password';
