@@ -98,6 +98,12 @@ const TASK_TOOLS = [
   { type: 'function', function: { name: 'task_update', description: 'อัปเดตสถานะงานย่อย: running (กำลังทำ) / done (เสร็จ) / failed (ล้มเหลว)', parameters: { type: 'object', properties: { id: { type: 'string' }, status: { type: 'string' } }, required: ['id', 'status'] } } },
   { type: 'function', function: { name: 'task_list', description: 'ดูรายการงานย่อยทั้งหมดพร้อมสถานะ (ใช้เช็คว่าทำถึงไหนแล้ว จะได้ทำงานต่อ)', parameters: { type: 'object', properties: {}, required: [] } } },
 ];
+const MEM_TOOLS = [
+  { type: 'function', function: { name: 'memory_add', description: 'จำข้อมูล/ความชอบสำคัญของผู้ใช้ไว้ข้ามแชท (เช่น ชื่อ, สไตล์ที่ชอบ, บริบทงาน) — ใช้เมื่อผู้ใช้บอกข้อมูลที่ควรจำ', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } },
+  { type: 'function', function: { name: 'memory_list', description: 'ดูสิ่งที่จำไว้เกี่ยวกับผู้ใช้ทั้งหมด', parameters: { type: 'object', properties: {}, required: [] } } },
+  { type: 'function', function: { name: 'kb_search', description: 'ค้นหาในฐานความรู้/เอกสารที่ผู้ใช้อัปโหลดไว้ (คืน snippet ที่เกี่ยวข้อง) — ใช้เมื่อผู้ใช้ถามอ้างอิงเอกสาร', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'kb_list', description: 'ดูรายชื่อเอกสารในฐานความรู้', parameters: { type: 'object', properties: {}, required: [] } } },
+];
 
 function stripHtml(h) {
   return h.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -139,6 +145,15 @@ async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, 
     if (name === 'task_add') { const t = { id: 'tk' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), title: String(args.title || 'งาน').slice(0, 140), status: 'pending', created: Date.now() }; arr.push(t); wsTasks(uid); return 'เพิ่มงาน: "' + t.title + '" (id ' + t.id + ')'; }
     if (name === 'task_update') { const t = arr.find(x => x.id === args.id); if (!t) return 'ไม่พบงาน ' + args.id; t.status = args.status || t.status; if (t.status === 'done' || t.status === 'failed') t.done = Date.now(); wsTasks(uid); if (t.status === 'done') wsBroadcast({ type: 'task_done', title: t.title }, uid); return 'อัปเดต "' + t.title + '" → ' + t.status; }
     if (name === 'task_list') { return arr.length ? arr.map(t => '[' + t.status + '] ' + t.title).join('\n') : 'ยังไม่มีงานในแผน'; }
+  }
+  if (name === 'memory_add') { const users = loadUsers(); const u = users.find(x => x.id === uid); if (!u) return 'ไม่พบผู้ใช้'; u.memory = u.memory || []; u.memory.push({ id: 'm' + Date.now().toString(36), text: String(args.text || '').slice(0, 300), created: Date.now() }); if (u.memory.length > 200) u.memory = u.memory.slice(-200); saveUsers(users); return 'จำไว้แล้ว: ' + args.text; }
+  if (name === 'memory_list') { const u = loadUsers().find(x => x.id === uid); return ((u && u.memory) || []).map(m => '- ' + m.text).join('\n') || 'ยังไม่มีความจำ'; }
+  if (name === 'kb_list') { const u = loadUsers().find(x => x.id === uid); return ((u && u.kb) || []).map(d => d.name + ' (' + d.text.length + ' ตัวอักษร)').join('\n') || 'ยังไม่มีเอกสารในฐานความรู้'; }
+  if (name === 'kb_search') {
+    const u = loadUsers().find(x => x.id === uid); const docs = (u && u.kb) || [];
+    const words = String(args.query || '').toLowerCase().split(/\s+/).filter(Boolean); const hits = [];
+    for (const d of docs) { const lc = d.text.toLowerCase(); let pos = -1; for (const w of words) { const i = lc.indexOf(w); if (i >= 0) { pos = i; break; } } if (pos >= 0) hits.push('[' + d.name + '] ...' + d.text.slice(Math.max(0, pos - 150), pos + 350).replace(/\s+/g, ' ').trim() + '...'); }
+    return hits.length ? hits.slice(0, 5).join('\n\n') : 'ไม่พบข้อมูลที่เกี่ยวข้องในเอกสาร';
   }
   const ek = Object.keys(EXTS).find(k => EXTS[k].TOOLS.some(t => t.function.name === name));
   if (ek) {
@@ -274,9 +289,10 @@ ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (�
 async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid, agentInstr) {
   root = root || DEFAULT_ROOT;
   const log = { items: [], push(x) { this.items.push(x); onStep && onStep(x); } }; // ส่ง step แบบ realtime
-  let tools = [...TOOLS, ...TASK_TOOLS]; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // task + extension
+  let tools = [...TOOLS, ...TASK_TOOLS, ...MEM_TOOLS]; if (ext) for (const k of Object.keys(EXTS)) if (ext[k] && ext[k].enabled) tools = tools.concat(EXTS[k].TOOLS); // task + memory + extension
   const msgs = [{ role: 'system', content: sysPrompt(root, isAdmin) }];
   if (agentInstr) msgs.push({ role: 'system', content: 'บทบาท/หน้าที่เฉพาะที่ผู้ใช้กำหนดให้คุณ (ยึดตามนี้เป็นหลัก):\n' + agentInstr });
+  if (uid) { const _u = loadUsers().find(x => x.id === uid); const memText = ((_u && _u.memory) || []).map(m => '- ' + m.text).join('\n'); if (memText) msgs.push({ role: 'system', content: 'สิ่งที่คุณจำได้เกี่ยวกับผู้ใช้คนนี้ (ใช้ประกอบการตอบ ไม่ต้องพูดถึงถ้าไม่เกี่ยวข้อง):\n' + memText }); }
   msgs.push(...messages);
   const MAX = Number(process.env.MAX_ROUNDS) || 100; // ทำต่อเนื่องจนจบ (backstop กัน runaway)
   const seen = {}; // นับคำสั่งซ้ำ กันวนไม่จบ
@@ -434,6 +450,14 @@ const server = http.createServer(async (req, res) => {
     if ((m = p.match(/^\/api\/agents\/([\w-]+)$/)) && req.method === 'DELETE') {
       const users = loadUsers(); const u = users.find(x => x.id === me.id); if (u) { u.agents = (u.agents || []).filter(a => a.id !== m[1]); saveUsers(users); } return J(res, 200, { ok: true });
     }
+    // ---- Memory (จำข้ามแชท) ----
+    if (p === '/api/memory' && req.method === 'GET') return J(res, 200, me.memory || []);
+    if (p === '/api/memory' && req.method === 'POST') { const b = JSON.parse(await readBody(req) || '{}'); if (!b.text) return J(res, 400, { error: 'ต้องมีข้อความ' }); const users = loadUsers(); const u = users.find(x => x.id === me.id); u.memory = u.memory || []; u.memory.push({ id: 'm' + Date.now().toString(36), text: String(b.text).slice(0, 300), created: Date.now() }); saveUsers(users); return J(res, 200, { ok: true, memory: u.memory }); }
+    if ((m = p.match(/^\/api\/memory\/([\w-]+)$/)) && req.method === 'DELETE') { const users = loadUsers(); const u = users.find(x => x.id === me.id); if (u) { u.memory = (u.memory || []).filter(x => x.id !== m[1]); saveUsers(users); } return J(res, 200, { ok: true }); }
+    // ---- Knowledge base (เอกสารอ้างอิง) ----
+    if (p === '/api/kb' && req.method === 'GET') return J(res, 200, (me.kb || []).map(d => ({ id: d.id, name: d.name, size: d.text.length })));
+    if (p === '/api/kb' && req.method === 'POST') { const b = JSON.parse(await readBody(req) || '{}'); if (!b.text || !b.name) return J(res, 400, { error: 'ต้องมีชื่อ+เนื้อหา' }); const users = loadUsers(); const u = users.find(x => x.id === me.id); u.kb = u.kb || []; if (u.kb.length >= 50) return J(res, 400, { error: 'เอกสารเต็ม (สูงสุด 50)' }); u.kb.push({ id: 'kb' + Date.now().toString(36), name: String(b.name).slice(0, 120), text: String(b.text).slice(0, 300000) }); saveUsers(users); return J(res, 200, { ok: true, kb: u.kb.map(d => ({ id: d.id, name: d.name, size: d.text.length })) }); }
+    if ((m = p.match(/^\/api\/kb\/([\w-]+)$/)) && req.method === 'DELETE') { const users = loadUsers(); const u = users.find(x => x.id === me.id); if (u) { u.kb = (u.kb || []).filter(x => x.id !== m[1]); saveUsers(users); } return J(res, 200, { ok: true }); }
     if (p === '/api/tasks' && req.method === 'GET') return J(res, 200, userTasks(me.id));
     if (p === '/api/tasks/clear' && req.method === 'POST') { TASKS.set(me.id, []); return J(res, 200, { ok: true }); }
     if (p === '/api/serverstat' && req.method === 'GET') {

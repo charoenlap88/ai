@@ -268,6 +268,15 @@
   </div>
 </div>
 
+<input type="file" id="kbFile" style="display:none" onchange="uploadKb(this.files[0])" accept="image/*,.pdf,.docx,.txt,.csv,.md,.json">
+<div class="overlay" id="ovMem" onclick="if(event.target===this)$('ovMem').classList.remove('on')">
+  <div class="modal" style="width:600px;max-height:84vh">
+    <h3 style="display:flex;align-items:center;gap:8px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg> ความจำ &amp; ฐานความรู้</h3>
+    <div class="mbody" id="memBody"></div>
+    <div class="mfoot"><button class="btn pri" onclick="$('ovMem').classList.remove('on')">ปิด</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="ovAgents" onclick="if(event.target===this)$('ovAgents').classList.remove('on')">
   <div class="modal" style="width:560px;max-height:84vh">
     <h3 style="display:flex;align-items:center;gap:8px">🎭 Agents (บทบาทสำเร็จรูป)</h3>
@@ -711,6 +720,7 @@ function renderUser(){
     `<button onclick="openProfile();toggleUserMenu(false)">${ic('user')} โปรไฟล์</button>`+
     `<button onclick="openSettings();toggleUserMenu(false)">${ic('gear')} ตั้งค่า</button>`+
     `<button onclick="openExt();toggleUserMenu(false)">${ic('plug')} Extensions</button>`+
+    `<button onclick="openMem();toggleUserMenu(false)">${ic('brain')} ความจำ &amp; ฐานความรู้</button>`+
     (admin?`<button onclick="openAdmin();toggleUserMenu(false)">${ic('chart')} Token ผู้ใช้ / Admin</button>`:'')+
     `<button onclick="logout()" style="color:#ff9a9a">${ic('logout')} ออกจากระบบ</button>`;
 }
@@ -800,6 +810,30 @@ async function resetPw(id,email){
   alertBox(d.error ? d.error : ('ตั้งรหัสผ่านใหม่ให้ '+email+' แล้ว'));
 }
 
+// ---- Memory & Knowledge base ----
+let _mem=[],_kb=[];
+async function openMem(){ _mem=await fetch('/api/memory').then(r=>r.json()).catch(()=>[]); _kb=await fetch('/api/kb').then(r=>r.json()).catch(()=>[]); renderMem(); $('ovMem').classList.add('on'); }
+function renderMem(){ $('memBody').innerHTML=`
+  <div class="lbl" style="margin-bottom:8px">ความจำ — AI จำสิ่งเหล่านี้ข้ามทุกแชท</div>
+  <div style="display:flex;gap:8px;margin-bottom:11px"><input id="memInp" placeholder="เพิ่มสิ่งที่อยากให้ AI จำ เช่น 'ฉันชอบให้ตอบสั้นๆ'" onkeydown="if(event.key==='Enter')addMemory()"><button class="btn pri" onclick="addMemory()">จำ</button></div>
+  ${_mem.length?_mem.map(m=>`<div class="prow"><span style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(m.text)}</span><span class="x" onclick="delMemory('${m.id}')" title="ลบ">✕</span></div>`).join(''):'<div class="hint" style="padding:12px">ยังไม่มีความจำ (AI จะเพิ่มเองเมื่อคุณบอกข้อมูลสำคัญ หรือเพิ่มเองได้)</div>'}
+  <div class="lbl" style="margin:18px 0 8px">ฐานความรู้ — เอกสารให้ AI อ้างอิง</div>
+  <button class="btn" onclick="$('kbFile').click()" style="margin-bottom:11px">+ อัปโหลดเอกสาร (pdf / word / txt / รูป)</button>
+  ${_kb.length?_kb.map(d=>`<div class="prow"><span style="flex:none">${ic('file',15)}</span><span style="flex:1;font-size:13px;overflow-wrap:anywhere">${esc(d.name)} <span style="color:#8a90a6;font-size:11px">(${d.size.toLocaleString()} ตัวอักษร)</span></span><span class="x" onclick="delKb('${d.id}')" title="ลบ">✕</span></div>`).join(''):'<div class="hint" style="padding:12px">ยังไม่มีเอกสาร — อัปโหลดแล้วสั่ง AI "หาข้อมูล X จากเอกสาร" ได้</div>'}
+  <div id="kbMsg" style="font-size:12px;color:#8a90a6;margin-top:9px"></div>`;
+}
+async function addMemory(){ const t=$('memInp').value.trim(); if(!t)return; const d=await fetch('/api/memory',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t})}).then(r=>r.json()); _mem=d.memory||_mem; renderMem(); }
+async function delMemory(id){ await fetch('/api/memory/'+id,{method:'DELETE'}); _mem=_mem.filter(m=>m.id!==id); renderMem(); }
+async function uploadKb(file){ if(!file)return; const msg=$('kbMsg'); if(msg) msg.textContent='กำลังอ่าน '+file.name+'...';
+  try{ const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const up=await fetch('/api/upload',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:file.name,data})}).then(r=>r.json());
+    if(up.error){ if(msg)msg.textContent='❌ '+up.error; return; }
+    const d=await fetch('/api/kb',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:file.name,text:up.text})}).then(r=>r.json());
+    if(d.error){ if(msg)msg.textContent='❌ '+d.error; return; } _kb=d.kb||_kb; renderMem();
+  }catch(e){ if(msg)msg.textContent='❌ อัปโหลดไม่สำเร็จ'; }
+  $('kbFile').value='';
+}
+async function delKb(id){ await fetch('/api/kb/'+id,{method:'DELETE'}); _kb=_kb.filter(d=>d.id!==id); renderMem(); }
 // ---- Saved Agents ----
 let currentAgent=JSON.parse(localStorage.getItem('dsagent')||'null'), _agents=[];
 function renderAgentChip(){ const b=$('agentChip'); if(b) b.innerHTML=(currentAgent?esc(currentAgent.emoji||'🤖')+' '+esc(currentAgent.name):'🎭 ทั่วไป')+' ▾'; }
