@@ -17,7 +17,7 @@
   "build": {
     "appId": "com.charoenlap.aiagent",
     "productName": "AI Agent",
-    "files": ["main.js", "index.html", "package.json"],
+    "files": ["main.js", "index.html", "package.json", "tts.js"],
     "directories": { "output": "release" },
     "publish": [{ "provider": "generic", "url": "https://ai.charoenlap.com/downloads/" }],
     "mac": {

@@ -82,6 +82,11 @@ function checkUpdates() {
 // กดปุ่ม ⟳ อัปเดต ในแอป → ตรวจ + เด้งผลให้เห็น
 ipcMain.handle('check-update', () => { try { manualCheck = true; require('electron-updater').autoUpdater.checkForUpdates(); return true; } catch { return false; } });
 ipcMain.handle('app-version', () => app.getVersion());
+// ---- TTS อ่านออกเสียงด้วยเสียงเนทีฟ OS ----
+const tts = require('./tts.js');
+ipcMain.handle('tts-speak', (e, a) => { try { tts.speak(a && a.text, a && a.voice); return true; } catch { return false; } });
+ipcMain.handle('tts-stop', () => { try { tts.stop(); } catch {} return true; });
+ipcMain.handle('tts-voices', () => { try { return tts.voices(); } catch { return []; } });
 app.whenReady().then(() => { createWindow(); createTray(); checkUpdates(); });
 app.on('window-all-closed', () => {}); // ไม่ quit — อยู่ใน system tray ต่อ
 app.on('activate', () => { if (win) { win.show(); win.focus(); } });
