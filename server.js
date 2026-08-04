@@ -548,6 +548,7 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse(await readBody(req) || '{}');
       if (b.pinned != null) rec.pinned = !!b.pinned;
       if (b.category != null) rec.category = String(b.category).slice(0, 40);
+      if (b.title != null && String(b.title).trim()) rec.title = String(b.title).slice(0, 80);
       db.putSession(rec); return J(res, 200, { ok: true });
     }
     if ((m = p.match(/^\/api\/sessions\/([\w-]+)\/share$/)) && req.method === 'POST') {
