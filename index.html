@@ -533,7 +533,7 @@ async function send(){
       buf+=dec.decode(value,{stream:true}); let idx;
       while((idx=buf.indexOf('\n'))>=0){
         const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+1); if(!line)continue;
-        const ev=JSON.parse(line);
+        let ev; try{ ev=JSON.parse(line); }catch{ continue; } // บรรทัดเพี้ยน/ไม่ครบ ข้ามไป ไม่ให้ทั้งคำตอบล่ม
         if(ev.type==='step'){ steps.push(ev.text); thinking.textContent=steps.slice(-10).join('\n'); thinking.scrollTop=1e9; $('chat').scrollTop=1e9; }
         else if(ev.type==='delta'){ if(ev.text===null){ if(streamEl){streamEl.remove();streamEl=null;} } else { if(!streamEl){ streamEl=add('bot',''); $('chat').appendChild(thinking); } streamEl.textContent+=ev.text; $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } } // สตรีมคำตอบทีละคำ
         else if(ev.type==='notify'){ steps.push('แจ้ง: '+ev.text); add('bot', fmt(ev.text)); $('chat').appendChild(thinking); $('chat').scrollTop=1e9; } // ข้อความสด (แผน/ความคืบหน้า)

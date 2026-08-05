@@ -77,7 +77,7 @@ const TOOLS = [
   { type: 'function', function: { name: 'write_file', description: 'สร้าง/เขียนทับไฟล์ (backup อัตโนมัติ)', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } } },
   { type: 'function', function: { name: 'web_search', description: 'ค้นหาข้อมูลบนอินเทอร์เน็ต (คืนหัวข้อ+ลิงก์)', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'generate_image', description: 'สร้างรูปภาพจากคำบรรยาย (ฟรี ไม่มีค่าใช้จ่าย) — คืน URL รูป ให้แสดงต่อ user ด้วย markdown ![](url)', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'คำบรรยายรูป (ภาษาอังกฤษได้ผลดีสุด)' }, width: { type: 'number' }, height: { type: 'number' } }, required: ['prompt'] } } },
-  { type: 'function', function: { name: 'make_file', description: 'สร้างไฟล์ให้ user ดาวน์โหลด รองรับ .xlsx(Excel)/.docx(Word)/.csv/.txt/.md/.html/.json — คืนลิงก์ดาวน์โหลด', parameters: { type: 'object', properties: { filename: { type: 'string', description: 'ชื่อไฟล์พร้อมนามสกุล เช่น report.xlsx, letter.docx, data.csv' }, content: { type: 'string', description: 'เนื้อหา: .xlsx ใส่เป็น CSV (คั่น comma ขึ้นบรรทัดใหม่=แถว), .docx ใส่ข้อความ (ขึ้นบรรทัด=ย่อหน้า), อื่นๆใส่เนื้อหาตรงๆ' } }, required: ['filename', 'content'] } } },
+  { type: 'function', function: { name: 'make_file', description: 'สร้างไฟล์ให้ user ดาวน์โหลด รองรับ .xlsx(Excel)/.docx(Word)/.csv/.txt/.md/.html/.json — คืนลิงก์ดาวน์โหลด', parameters: { type: 'object', properties: { filename: { type: 'string', description: 'ชื่อไฟล์พร้อมนามสกุล เช่น report.xlsx, letter.docx, data.csv' }, content: { type: 'string', description: 'เนื้อหา: .xlsx ใส่เป็น CSV (คั่น comma ขึ้นบรรทัดใหม่=แถว), .docx ใส่ข้อความ (ขึ้นบรรทัด=ย่อหน้า), อื่นๆใส่เนื้อหาตรงๆ' }, append: { type: 'boolean', description: 'true = ต่อท้ายไฟล์ชื่อเดียวกันที่เพิ่งสร้างในบทสนทนานี้ (ใช้เขียนไฟล์ .txt/.md/.html/.json/.csv ที่ยาวมากแบ่งหลายครั้ง)' } }, required: ['filename', 'content'] } } },
   { type: 'function', function: { name: 'fetch_url', description: 'อ่านเนื้อหาหน้าเว็บจาก URL (คืนข้อความ)', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
   { type: 'function', function: { name: 'run_command', description: 'รันคำสั่ง shell ในโฟลเดอร์โปรเจกต์ (เช่น ls, npm test, git status)', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } },
   { type: 'function', function: { name: 'notify', description: 'ส่งข้อความ/ความคืบหน้าให้ user ทันที — ใช้บอกแผน+เวลาที่ประเมินก่อนเริ่มงาน และอัปเดตระหว่างงานยาว', parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] } } },
@@ -90,6 +90,7 @@ const TOOLS = [
   { type: 'function', function: { name: 'bg_list', description: 'ลิสต์ background jobs ทั้งหมด', parameters: { type: 'object', properties: {}, required: [] } } },
 ];
 const JOBS = new Map(); // background jobs: id -> {proc, status, out[], cmd, started}
+const FILE_BUILD = new Map(); // make_file append: uid|filename -> key (ไฟล์ที่กำลังเขียนแบ่งหลายครั้ง)
 // แผนงานเก็บใน record ของ user (persist ข้าม restart)
 const userTasks = uid => { const u = loadUsers().find(x => x.id === uid); return (u && u.tasks) || []; };
 const wsTasks = uid => wsBroadcast({ type: 'tasks', tasks: userTasks(uid) }, uid); // push แผงงานล่าสุดให้ UI
@@ -169,13 +170,22 @@ async function runTool(name, args, allowWrite, allowShell, log, root, onNotify, 
     const fn = (args.filename || 'file.txt').replace(/[^\w.\-ก-๙]+/g, '_').slice(0, 80);
     const ext = (fn.split('.').pop() || 'txt').toLowerCase();
     const content = args.content || '';
+    const dir = path.join(DIR, 'userfiles'); fs.mkdirSync(dir, { recursive: true });
+    const canAppend = !['xlsx', 'docx'].includes(ext); // office format ต่อท้ายไม่ได้
+    const bkey = (uid || 'anon') + '|' + fn;
+    if (args.append && canAppend && FILE_BUILD.has(bkey)) { // ต่อไฟล์เดิม
+      const key = FILE_BUILD.get(bkey);
+      fs.appendFileSync(path.join(dir, key), Buffer.from(content, 'utf8'));
+      const sz = fs.statSync(path.join(dir, key)).size;
+      return 'ต่อไฟล์สำเร็จ (รวม ' + sz + ' bytes) — ถ้ายังไม่จบให้เรียก make_file append=true ต่อ, ถ้าจบแล้วให้ลิงก์: [ดาวน์โหลด ' + fn + '](/userfiles/' + key + ')';
+    }
     let data;
     if (ext === 'xlsx') data = office.xlsx(office.parseCSV(content));
     else if (ext === 'docx') data = office.docx(content);
     else data = Buffer.from(content, 'utf8'); // txt/csv/md/html/json/xml/...
-    const dir = path.join(DIR, 'userfiles'); fs.mkdirSync(dir, { recursive: true });
     const key = crypto.randomBytes(8).toString('hex') + '-' + fn;
     fs.writeFileSync(path.join(dir, key), data);
+    if (canAppend) FILE_BUILD.set(bkey, key); // จำไว้เผื่อ append ต่อ
     return 'สร้างไฟล์สำเร็จ (' + data.length + ' bytes) — ให้ลิงก์ดาวน์โหลดกับ user ด้วย markdown: [ดาวน์โหลด ' + fn + '](/userfiles/' + key + ')';
   }
   if (name === 'bg_list') { return [...JOBS.values()].map(j => j.id + ' [' + j.status + '] ' + j.cmd.slice(0, 50)).join('\n') || 'ไม่มี background job'; }
@@ -273,7 +283,8 @@ const sysPrompt = (root, isAdmin) => `คุณคือ "AI Agent" ผู้ช
 ⚠️ ตอบเป็น "ภาษาไทย" เท่านั้น 100% ห้ามใช้ภาษาจีนหรือภาษาอื่นเด็ดขาด (ยกเว้นโค้ด ชื่อเฉพาะ หรือข้อความที่ผู้ใช้พิมพ์มาเป็นภาษาอื่น) แม้แต่คำเดียวก็ห้าม
 - ต้องการสร้างรูป ให้ใช้ tool generate_image (ฟรี) แล้วแทรกรูปในคำตอบด้วย markdown ![](url)
 - ถ้าต้องอธิบาย flow / ผังงาน / ลำดับขั้น / สถาปัตยกรรม / diagram ให้วาดด้วย Mermaid ในบล็อก \`\`\`mermaid ... \`\`\` (เว็บจะ render เป็นแผนภาพให้อัตโนมัติ)
-- ผู้ใช้อยากได้ไฟล์ (Excel/Word/CSV/txt) ให้ใช้ tool make_file แล้วส่งลิงก์ดาวน์โหลดให้ (xlsx ใส่ content เป็น CSV, docx ใส่เป็นข้อความ)
+- ผู้ใช้อยากได้ไฟล์ (Excel/Word/CSV/txt/html) ให้ใช้ tool make_file แล้วส่งลิงก์ดาวน์โหลดให้ (xlsx ใส่ content เป็น CSV, docx ใส่เป็นข้อความ)
+- ⚠️ ไฟล์/โค้ดยาวมาก (เช่น เกม HTML): อย่ายัดทั้งไฟล์ใน make_file ครั้งเดียว (จะโดนตัดกลางคัน) — ให้แบ่งเขียนหลายครั้ง: ครั้งแรก append=false ครั้งต่อๆ ไป append=true ครั้งละ ~150 บรรทัด จนจบไฟล์ แล้วค่อยส่งลิงก์
 - 📋 งานที่มีหลายขั้นตอน ให้วางแผนด้วย task_add (สร้าง checklist) แล้วอัปเดต task_update เป็น running/done ตอนทำแต่ละขั้น (user จะเห็นแผงงานสถานะ real-time)
 - ⭐ ถ้าคำตอบเป็น "คำถามให้ผู้ใช้เลือก" (เช่น ถามว่าจะทำแบบไหน/เลือกอะไร) ให้จบด้วยบล็อก \`\`\`options โดยแต่ละบรรทัด = 1 ตัวเลือก (สั้นๆ) เว็บจะแสดงเป็นปุ่มให้กดได้เลย เช่น:\n\`\`\`options\nใช่ ทำเลย\nไม่ ขอแบบอื่น\n\`\`\`
 คุณเป็นผู้ช่วยเขียนโค้ด + ค้นคว้าข้อมูล เข้าถึงไฟล์ในโปรเจกต์ได้ (root = ${root})
@@ -290,10 +301,10 @@ ${AGENT_RULES ? '\n===== กฎการเขียน/แก้โค้ด (�
 async function streamRound(msgs, tools, onDelta) {
   const res = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, messages: msgs, tools, tool_choice: 'auto', max_tokens: 8000, stream: true, stream_options: { include_usage: true } }),
+    body: JSON.stringify({ model: MODEL, messages: msgs, tools, tool_choice: 'auto', max_tokens: 8192, stream: true, stream_options: { include_usage: true } }),
   });
   if (!res.ok) throw new Error('DeepSeek ' + res.status + ' ' + (await res.text()).slice(0, 200));
-  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', content = '', tool = [], usage = 0;
+  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', content = '', tool = [], usage = 0, finish = '';
   for (;;) {
     const { value, done } = await reader.read(); if (done) break;
     buf += dec.decode(value, { stream: true }); let nl;
@@ -303,13 +314,14 @@ async function streamRound(msgs, tools, onDelta) {
       const data = line.slice(5).trim(); if (data === '[DONE]') continue;
       let j; try { j = JSON.parse(data); } catch { continue; }
       if (j.usage) usage = j.usage.total_tokens || usage;
+      if (j.choices && j.choices[0] && j.choices[0].finish_reason) finish = j.choices[0].finish_reason;
       const d = j.choices && j.choices[0] && j.choices[0].delta; if (!d) continue;
       if (d.content) { content += d.content; onDelta && onDelta(d.content); }
       if (d.tool_calls) for (const tc of d.tool_calls) { const k = tc.index || 0; tool[k] = tool[k] || { id: '', type: 'function', function: { name: '', arguments: '' } }; if (tc.id) tool[k].id = tc.id; if (tc.function) { if (tc.function.name) tool[k].function.name += tc.function.name; if (tc.function.arguments) tool[k].function.arguments += tc.function.arguments; } }
     }
   }
   const message = { role: 'assistant', content: content || null }; const tc = tool.filter(Boolean); if (tc.length) message.tool_calls = tc;
-  return { message, usage };
+  return { message, usage, finish };
 }
 
 async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ext, isAdmin, uid, agentInstr, onDelta) {
@@ -341,8 +353,18 @@ async function chat(messages, allowWrite, allowShell, onStep, root, onNotify, ex
         log.push('🛑 หยุด: เรียกคำสั่งเดิมซ้ำหลายครั้ง');
         return { reply: 'หยุดอัตโนมัติ — agent เรียกคำสั่งเดิมซ้ำหลายรอบ (งานนี้อาจทำไม่ได้/ไม่มีข้อมูลให้ทำต่อ)', actions: log.items, truncated: true, tokens: totalTokens };
       }
-      let out;
-      try { out = await runTool(tc.function.name, JSON.parse(tc.function.arguments || '{}'), allowWrite, allowShell, log, root, onNotify, ext, uid); }
+      let out, pArgs;
+      try { pArgs = JSON.parse(tc.function.arguments || '{}'); }
+      catch (e) { // อาร์กิวเมนต์ถูกตัดกลางคัน (มักเพราะไฟล์/โค้ดยาวเกิน max_tokens) → บอกโมเดลให้แบ่งเขียน
+        const cut = round.finish === 'length';
+        out = cut
+          ? 'อาร์กิวเมนต์ยาวเกินถูกตัด — เขียนไฟล์ให้สั้นลง หรือแบ่งเขียนหลายครั้งด้วย make_file: ครั้งแรก append=false แล้วครั้งต่อๆ ไป append=true (ครั้งละ ~150 บรรทัด)'
+          : 'อาร์กิวเมนต์ไม่ใช่ JSON ที่ถูกต้อง — ส่งใหม่ให้ครบถ้วน';
+        log.push('⚠️ ' + tc.function.name + ': ' + (cut ? 'เนื้อหายาวเกิน แบ่งเขียนใหม่' : 'args เพี้ยน'));
+        msgs.push({ role: 'tool', tool_call_id: tc.id, content: out });
+        continue;
+      }
+      try { out = await runTool(tc.function.name, pArgs, allowWrite, allowShell, log, root, onNotify, ext, uid); }
       catch (e) { out = 'ERROR: ' + e.message; log.push('❌ ' + e.message); }
       msgs.push({ role: 'tool', tool_call_id: tc.id, content: String(out) });
     }
