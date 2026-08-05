@@ -206,14 +206,16 @@ function runTool(name, a){
     if(name==='bg_resume'){ try{j.proc.kill('SIGCONT')}catch{} j.status='running'; return 'ต่อ '+j.id; } }
   if(name==='list_dir') return fs.readdirSync(safe(a.path),{withFileTypes:true}).filter(d=>!d.name.startsWith('.')).map(d=>d.name+(d.isDirectory()?'/':'')).join('\n')||'(ว่าง)';
   if(name==='read_file') return fs.readFileSync(safe(a.path),'utf8').slice(0,100000);
-  if(name==='write_file'){ if(!$('allowWrite').checked) return 'ปฏิเสธ: โหมดอ่านอย่างเดียว'; const abs=safe(a.path); fs.mkdirSync(path.dirname(abs),{recursive:true}); if(fs.existsSync(abs)) fs.copyFileSync(abs,abs+'.bak'); fs.writeFileSync(abs,a.content); return 'เขียนสำเร็จ'; }
+  if(name==='write_file'){ if(!$('allowWrite').checked) return 'ปฏิเสธ: โหมดอ่านอย่างเดียว'; const abs=safe(a.path); fs.mkdirSync(path.dirname(abs),{recursive:true});
+    if(a.append && fs.existsSync(abs)){ fs.appendFileSync(abs, a.content); return 'ต่อไฟล์สำเร็จ (รวม '+fs.statSync(abs).size+' bytes) — ยังไม่จบเรียก append=true ต่อ, จบแล้วบอก user'; }
+    if(fs.existsSync(abs)) fs.copyFileSync(abs,abs+'.bak'); fs.writeFileSync(abs,a.content); return 'เขียนสำเร็จ'; }
   if(name==='run_command'){ if(!$('allowShell').checked) return 'ปฏิเสธ: ปิดรันคำสั่ง'; if(/rm\s+-rf\s+[\/~]|mkfs|dd\s+if=|shutdown|reboot|sudo/i.test(a.command)) return 'ปฏิเสธ: คำสั่งอันตราย'; try{ return execSync(a.command,{cwd:root,timeout:60000,maxBuffer:2e6}).toString().slice(0,8000)||'(ไม่มี output)'; }catch(e){ return 'ERROR: '+String(e.stderr||e.message).slice(0,2000); } }
   throw new Error('unknown tool '+name);
 }
 const TOOLS = [
   {type:'function',function:{name:'list_dir',description:'ลิสต์ไฟล์/โฟลเดอร์',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}}},
   {type:'function',function:{name:'read_file',description:'อ่านไฟล์',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}}},
-  {type:'function',function:{name:'write_file',description:'เขียน/สร้างไฟล์ (backup อัตโนมัติ)',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string'}},required:['path','content']}}},
+  {type:'function',function:{name:'write_file',description:'เขียน/สร้างไฟล์ (backup อัตโนมัติ). ไฟล์/โค้ดยาวมากให้แบ่งเขียนหลายครั้ง: ครั้งแรก append=false ครั้งต่อไป append=true',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string'},append:{type:'boolean',description:'true=ต่อท้ายไฟล์เดิม (เขียนไฟล์ยาวแบ่งหลายครั้ง)'}},required:['path','content']}}},
   {type:'function',function:{name:'run_command',description:'รันคำสั่ง shell ในโฟลเดอร์',parameters:{type:'object',properties:{command:{type:'string'}},required:['command']}}},
   {type:'function',function:{name:'notify',description:'ส่งข้อความ/ความคืบหน้าให้ user ทันที (บอกแผน+เวลาที่ประเมินก่อนเริ่ม, อัปเดตระหว่างงานยาว)',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}},
   {type:'function',function:{name:'bg_start',description:'รันคำสั่งยาวเป็น background job (คืน id)',parameters:{type:'object',properties:{command:{type:'string'}},required:['command']}}},
@@ -228,7 +230,8 @@ const SYS = () => ({ role:'system', content:`คุณคือ AI Agent ทำ�
 ถ้าคำตอบเป็นคำถามให้ผู้ใช้เลือก ให้จบด้วยบล็อก \`\`\`options (แต่ละบรรทัด=1 ตัวเลือกสั้นๆ) แอปจะแสดงเป็นปุ่มกดได้
 คุณเป็นผู้ช่วยเขียนโค้ดที่เข้าถึงไฟล์ในเครื่องผู้ใช้ได้ (root = ${root}). ใช้ tool สำรวจก่อน อ่านก่อนแก้ แก้ให้น้อยที่สุด สรุปเป็นภาษาไทย.
 ⏱️ ทุกครั้งที่รับงานใหม่ ก่อนลงมือ ให้เรียก notify 1 ครั้งก่อนเสมอ: (1) วิเคราะห์งานสั้นๆ (2) ประเมินเวลาที่จะใช้.
-🔄 งานยาว (build/ติดตั้ง/สคริปต์) ให้ bg_start เป็น background แล้ว bg_status ดูว่าใกล้เสร็จยัง · bg_pause/bg_resume/bg_stop · notify อัปเดตเป็นระยะ.` });
+🔄 งานยาว (build/ติดตั้ง/สคริปต์) ให้ bg_start เป็น background แล้ว bg_status ดูว่าใกล้เสร็จยัง · bg_pause/bg_resume/bg_stop · notify อัปเดตเป็นระยะ.
+⚠️ ไฟล์/โค้ดยาวมาก (เช่น เกม HTML): อย่ายัดทั้งไฟล์ใน write_file ครั้งเดียว (จะโดนตัดกลางคัน) — แบ่งเขียนหลายครั้ง: ครั้งแรก append=false ครั้งต่อๆ ไป append=true ครั้งละ ~150 บรรทัด จนจบ.` });
 
 // ---- chat UI + loop ----
 function add(cls, html){ const d=document.createElement('div'); d.className='msg '+cls; d.innerHTML=html; $('chat').appendChild(d); $('chat').scrollTop=1e9; return d; }
@@ -253,8 +256,14 @@ async function send(){
       const m=d.message; messages.push(m);
       if(!m.tool_calls || !m.tool_calls.length){ thinking.remove(); add('bot', fmt(m.content||'(จบ)')); ttsSpeak(m.content); saveSession(); break; }
       for(const tc of m.tool_calls){
-        let out; try{ out=runTool(tc.function.name, JSON.parse(tc.function.arguments||'{}')); }catch(e){ out='ERROR: '+e.message; }
-        steps.push('🔧 '+tc.function.name+' '+(JSON.parse(tc.function.arguments||'{}').path||JSON.parse(tc.function.arguments||'{}').command||'')); thinking.textContent='⏳ '+steps.slice(-7).join('\n');
+        let a; try{ a=JSON.parse(tc.function.arguments||'{}'); }
+        catch(e){ // args ถูกตัดกลางคัน (โค้ด/ไฟล์ยาวเกิน) — บอกโมเดลให้แบ่งเขียน แทนโยน error ขึ้นจอ
+          const msg='อาร์กิวเมนต์ยาวเกินถูกตัด — เขียนไฟล์ให้สั้นลง หรือแบ่งเขียนหลายครั้งด้วย write_file: ครั้งแรก append=false แล้วครั้งต่อๆ ไป append=true (ครั้งละ ~150 บรรทัด)';
+          steps.push('⚠️ '+tc.function.name+': เนื้อหายาวเกิน แบ่งเขียนใหม่'); thinking.textContent='⏳ '+steps.slice(-7).join('\n');
+          messages.push({role:'tool',tool_call_id:tc.id,content:msg}); continue;
+        }
+        let out; try{ out=runTool(tc.function.name, a); }catch(e){ out='ERROR: '+e.message; }
+        steps.push('🔧 '+tc.function.name+' '+(a.path||a.command||'')); thinking.textContent='⏳ '+steps.slice(-7).join('\n');
         messages.push({role:'tool',tool_call_id:tc.id,content:String(out)});
       }
       if(i===39){ thinking.remove(); add('bot','(หยุดที่ 40 รอบ)'); }

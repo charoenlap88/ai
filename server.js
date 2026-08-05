@@ -630,7 +630,7 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse(await readBody(req) || '{}');
       const r = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' },
-        body: JSON.stringify({ model: MODEL, messages: b.messages || [], tools: b.tools, tool_choice: b.tools ? 'auto' : undefined, max_tokens: 4000 }),
+        body: JSON.stringify({ model: MODEL, messages: b.messages || [], tools: b.tools, tool_choice: b.tools ? 'auto' : undefined, max_tokens: 8192 }),
       });
       if (!r.ok) return J(res, 502, { error: 'DeepSeek ' + r.status + ' ' + (await r.text()).slice(0, 150) });
       const jr = await r.json(); const tok = jr.usage?.total_tokens || 0; addUsage(me.id, tok);
