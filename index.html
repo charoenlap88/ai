@@ -1046,6 +1046,77 @@ function speak(text){
 }
 function stopSpeak(){ try{ window.speechSynthesis&&speechSynthesis.cancel(); }catch(e){} setMic(''); }
 if(window.speechSynthesis) speechSynthesis.onvoiceschanged=()=>{}; // โหลดรายชื่อเสียงล่วงหน้า
+
+// ================= Desktop app (companion): โหมดโค้ดในเครื่องผ่านสะพาน window.desktop =================
+// เว็บปกติไม่มี window.desktop → บล็อกนี้ข้ามทั้งหมด · desktop = ได้ฟีเจอร์เว็บครบ + แตะไฟล์ในเครื่องได้
+if(window.desktop && window.desktop.isDesktop){
+  let localMode=false, localRoot='';
+  const LOCAL_TOOLS=[
+    {type:'function',function:{name:'list_dir',description:'ลิสต์ไฟล์/โฟลเดอร์ในเครื่อง',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}}},
+    {type:'function',function:{name:'read_file',description:'อ่านไฟล์ในเครื่อง',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}}},
+    {type:'function',function:{name:'write_file',description:'เขียน/สร้างไฟล์ในเครื่อง (backup อัตโนมัติ). ไฟล์/โค้ดยาวมากแบ่งเขียน: ครั้งแรก append=false ครั้งต่อไป append=true',parameters:{type:'object',properties:{path:{type:'string'},content:{type:'string'},append:{type:'boolean'}},required:['path','content']}}},
+    {type:'function',function:{name:'run_command',description:'รันคำสั่ง shell ในโฟลเดอร์',parameters:{type:'object',properties:{command:{type:'string'}},required:['command']}}},
+    {type:'function',function:{name:'notify',description:'ส่งข้อความ/ความคืบหน้าให้ user ทันที (บอกแผน+เวลาก่อนเริ่มงาน)',parameters:{type:'object',properties:{message:{type:'string'}},required:['message']}}},
+  ];
+  const localSys=()=>({role:'system',content:`คุณคือ AI Agent (DeepSeek) — ตอบภาษาไทย 100% ห้ามภาษาอื่น (ยกเว้นโค้ด/ชื่อเฉพาะ). คุณเข้าถึงไฟล์ในเครื่องผู้ใช้ได้ (root=${localRoot}). ใช้ tool สำรวจก่อน อ่านก่อนแก้ แก้ให้น้อยที่สุด สรุปเป็นไทย. ก่อนเริ่มงานใหม่ให้เรียก notify แจ้งแผน+เวลาสั้นๆ 1 ครั้ง. ไฟล์/โค้ดยาวมาก (เช่น เกม HTML) ให้ write_file แบ่งหลายครั้ง: ครั้งแรก append=false ครั้งต่อไป append=true (~150 บรรทัด/ครั้ง).`});
+  function localRunTool(name,a){
+    const R=localRoot;
+    if(name==='notify'){ add('bot',fmt(a.message||'')); $('chat').scrollTop=1e9; return 'แจ้ง user แล้ว'; }
+    if(name==='list_dir') return window.desktop.listDir(R,a.path);
+    if(name==='read_file') return window.desktop.readFile(R,a.path);
+    if(name==='write_file'){ if(!$('allowWrite').checked) return 'ปฏิเสธ: โหมดอ่านอย่างเดียว (ติ๊ก "อนุญาตให้แก้ไฟล์")'; return window.desktop.writeFile(R,a.path,a.content,a.append); }
+    if(name==='run_command'){ if(!$('allowShell').checked) return 'ปฏิเสธ: ปิดรันคำสั่ง (ติ๊ก "อนุญาตรันคำสั่ง")'; return window.desktop.runCommand(R,a.command); }
+    throw new Error('unknown tool '+name);
+  }
+  async function localSend(){
+    if(genController) return;
+    const typed=$('inp').value.trim(); if(!typed) return;
+    if($('chat').querySelector('.hint')) $('chat').innerHTML='';
+    $('inp').value=''; add('user',esc(typed));
+    if(!history.length || history[0].role!=='system') history.unshift(localSys());
+    history.push({role:'user',content:typed});
+    genController=new AbortController(); setSending(true);
+    const thinking=add('acts','⏳ เริ่มทำงาน...'); const steps=[];
+    try{
+      for(let i=0;i<40;i++){
+        steps.push('💭 คิด (รอบ '+(i+1)+')'); thinking.textContent=steps.slice(-8).join('\n'); $('chat').scrollTop=1e9;
+        const d=await fetch('/api/llm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:history,tools:LOCAL_TOOLS}),signal:genController.signal}).then(r=>r.json());
+        if(d.error) throw new Error(d.error);
+        if(d.used!=null&&me){ me.used=d.used; me.quota=d.quota; renderUser(); }
+        const m=d.message; history.push(m);
+        if(!m.tool_calls||!m.tool_calls.length){ thinking.remove(); const b=add('bot',fmt(m.content||'(จบ)')); b.appendChild(msgActions(m.content||'')); saveSession(); if(voiceMode||readAloud) speak(m.content||''); break; }
+        for(const tc of m.tool_calls){
+          let a; try{ a=JSON.parse(tc.function.arguments||'{}'); }
+          catch(e){ steps.push('⚠️ '+tc.function.name+': เนื้อหายาวเกิน แบ่งเขียนใหม่'); thinking.textContent=steps.slice(-8).join('\n'); history.push({role:'tool',tool_call_id:tc.id,content:'อาร์กิวเมนต์ยาวเกินถูกตัด — แบ่งเขียนหลายครั้งด้วย write_file append=true (~150 บรรทัด/ครั้ง)'}); continue; }
+          let out; try{ out=localRunTool(tc.function.name,a); }catch(e){ out='ERROR: '+e.message; }
+          steps.push('🔧 '+tc.function.name+' '+(a.path||a.command||'')); thinking.textContent=steps.slice(-8).join('\n'); $('chat').scrollTop=1e9;
+          history.push({role:'tool',tool_call_id:tc.id,content:String(out)});
+        }
+        if(i===39){ thinking.remove(); add('bot','(หยุดที่ 40 รอบ)'); }
+      }
+    }catch(e){ thinking.textContent = e.name==='AbortError'?'⏹ หยุดแล้ว':('❌ '+e.message); }
+    finally{ genController=null; setSending(false); }
+  }
+  const _cloudSend=send; // เก็บ send เดิม (cloud streaming — ฟีเจอร์ครบ)
+  send=function(){ return (localMode && localRoot) ? localSend() : _cloudSend(); };
+  // UI: toggle "โค้ดในเครื่อง" ใน ctrlBar
+  const bar=$('ctrlBar');
+  if(bar){
+    const wrap=document.createElement('label');
+    wrap.style.cssText='color:#7fe0a5;display:inline-flex;align-items:center;gap:5px;cursor:pointer';
+    wrap.innerHTML='<input type="checkbox" id="localModeChk"> 💻 โค้ดในเครื่อง';
+    bar.appendChild(wrap);
+    $('localModeChk').addEventListener('change', async e=>{
+      if(e.target.checked){
+        let p=null; try{ p=await window.desktop.pickFolder(); }catch{}
+        if(!p){ e.target.checked=false; return; }
+        localRoot=p; localMode=true; currentRoot=p; if($('rootbox')) $('rootbox').textContent=p;
+        add('bot', fmt('💻 **โหมดโค้ดในเครื่อง** — โฟลเดอร์: `'+p+'`\nสั่ง AI อ่าน/แก้/รันไฟล์ในโฟลเดอร์นี้ได้เลย (แก้ไฟล์/รันคำสั่งต้องติ๊กอนุญาต) · ปิด checkbox เพื่อกลับโหมดคลาวด์'));
+      } else { localMode=false; add('bot','☁️ กลับสู่โหมดคลาวด์ (ฟีเจอร์เต็ม)'); }
+    });
+  }
+  window.desktop.version().then(v=>{ if(v) document.title='AI Agent v'+v; }).catch(()=>{});
+}
 </script>
 </body>
 </html>

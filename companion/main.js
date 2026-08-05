@@ -1,7 +1,8 @@
 // Electron main — เปิดหน้าต่าง + dialog เลือกโฟลเดอร์ + อัปเดตอัตโนมัติ + Google login (loopback)
 // build: Google desktop secret ฝังตอน CI · rebuild
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } = require('electron');
-const http = require('node:http'), crypto = require('node:crypto');
+const http = require('node:http'), crypto = require('node:crypto'), path = require('node:path');
+const SERVER = process.env.AI_SERVER || 'https://ai.charoenlap.com'; // โหลด UI เว็บเต็ม (ฟีเจอร์ครบ) + สะพานแตะไฟล์ในเครื่อง
 Menu.setApplicationMenu(null); // ซ่อนแถบเมนู File/Edit/View/Window/Help
 let win, tray, quitting = false;
 const TRAY_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAaklEQVR4nO3VTQoAIQiA0S7YSbr/ulZBBFH+paIfuEweTDNTautdc0oCEkA5PIsJ2IsFOPUFcEsU8JoIABorABsZwBUYIJUfgPojMHMJzbyGUARkp69P8Q2B2eXzd2wCsCIoO3wDOCYBCRhij9xuNH6MygAAAABJRU5ErkJggg==';
@@ -57,9 +58,12 @@ ipcMain.handle('google-login', () => new Promise((resolve, reject) => {
 function createWindow() {
   win = new BrowserWindow({
     width: 1040, height: 740, backgroundColor: '#0f1117', autoHideMenuBar: true,
-    webPreferences: { nodeIntegration: true, contextIsolation: false }, // local trusted app
+    webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
   });
-  win.loadFile('index.html');
+  win.loadURL(SERVER); // ฟีเจอร์เว็บครบ (streaming/ธีม/รูป/extensions/ความจำ...) + window.desktop สำหรับไฟล์ในเครื่อง
+  win.webContents.on('did-fail-load', (e, code, desc) => { if (code !== -3) win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<body style="font-family:sans-serif;background:#0f1117;color:#e6e8ef;text-align:center;padding-top:80px"><h2>เชื่อมต่อ ' + SERVER + ' ไม่ได้</h2><p>' + desc + '</p><p>ตรวจอินเทอร์เน็ตแล้วเปิดโปรแกรมใหม่</p></body>')); });
+  // เปิดลิงก์ภายนอก (target=_blank) ในเบราว์เซอร์ระบบ ไม่ใช่ในแอป
+  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.on('close', e => { if (!quitting) { e.preventDefault(); win.hide(); } }); // ปิดหน้าต่าง = ยุบลง system tray
 }
 let manualCheck = false;
